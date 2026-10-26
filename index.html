@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,44 +7,85 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lettore">
-<meta name="theme-color" content="#14161a">
+<meta name="theme-color" id="tc" content="#14161a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>Lettore</title>
 <style>
-:root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--hl:#3a3320;}
+:root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--accTxt:#1a1200;
+  --hl:#3a3320;--curtxt:#ffffff;--line:#2a2e36;--bd:#343944;--ctrl:#1a1d22;}
+[data-theme=white]{--bg:#ffffff;--card:#f1f3f5;--txt:#1c1f24;--mut:#6b7280;--acc:#e08a00;--accTxt:#1a1200;
+  --hl:#ffe7a3;--curtxt:#1c1f24;--line:#e3e6ea;--bd:#d3d7dd;--ctrl:#f7f8fa;}
+[data-theme=gray]{--bg:#e3e3df;--card:#d5d5d0;--txt:#25282c;--mut:#5d6169;--acc:#c77d00;--accTxt:#1a1200;
+  --hl:#f2e0a0;--curtxt:#25282c;--line:#c8c8c2;--bd:#bcbcb6;--ctrl:#dbdbd6;}
+[data-theme=sepia]{--bg:#f4ecd8;--card:#eadfc4;--txt:#433422;--mut:#7a6a52;--acc:#b4651b;--accTxt:#fff8ea;
+  --hl:#f0d58c;--curtxt:#3a2b1a;--line:#dccfae;--bd:#cfc19a;--ctrl:#ede3ca;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 .view{display:none;height:100%;flex-direction:column}
 .view.on{display:flex}
-header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #2a2e36}
-header h1{font-size:20px;margin:0;flex:1}
-button{font:inherit;color:var(--txt);background:var(--card);border:1px solid #2f343d;border-radius:12px;padding:10px 14px}
-button.acc{background:var(--acc);color:#1a1200;border:none;font-weight:700}
+header{padding:10px 12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);background:var(--bg);min-height:56px}
+header h1{font-size:20px;margin:0 0 0 4px;flex:1;min-width:0}
+header h1.t{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+button{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 14px;cursor:pointer}
+button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700}
+.ib{width:44px;height:44px;padding:0;border:none;background:transparent;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.ib:active{background:var(--card)}
+.ib svg{width:26px;height:26px}
 #list{flex:1;overflow:auto;padding:12px 16px}
 .book{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
 .book .t{flex:1;min-width:0}
 .book .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .book .t small{color:var(--mut)}
-.bar{height:4px;background:#2f343d;border-radius:2px;margin-top:6px}
+.bar{height:4px;background:var(--bd);border-radius:2px;margin-top:6px}
 .bar i{display:block;height:100%;background:var(--acc);border-radius:2px}
 .empty{color:var(--mut);text-align:center;margin-top:60px;line-height:1.6;padding:0 20px}
 #status{padding:8px 16px;color:var(--acc);font-size:14px;display:none}
-#text{flex:1;overflow:auto;padding:16px;font-size:19px;line-height:1.65;font-family:Georgia,serif}
+#text{flex:1;overflow:auto;padding:18px 18px 28px;font-size:19px;line-height:1.7;font-family:Georgia,serif}
 .s{border-radius:4px}
-.s.cur{background:var(--hl);box-shadow:0 0 0 3px var(--hl);color:#fff}
-#ctrl{border-top:1px solid #2a2e36;padding:10px 12px;background:#181b20}
-#ctrl .row{display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px}
-#ctrl .row button{min-width:52px;font-size:20px}
-#play{min-width:90px!important}
-#set{display:none;padding-top:6px}
-#set.on{display:block}
-#set label{display:block;font-size:13px;color:var(--mut);margin:8px 0 2px}
-#set input[type=range],#set select{width:100%}
-#set select{background:var(--card);color:var(--txt);border:1px solid #2f343d;border-radius:10px;padding:10px;font-size:16px}
-#pg{font-size:12px;color:var(--mut);text-align:center;margin-bottom:6px}
-#pos{width:100%}
+.s.cur{background:var(--hl);box-shadow:0 0 0 3px var(--hl);color:var(--curtxt)}
+/* barra di controllo in basso */
+#ctrl{border-top:1px solid var(--line);padding:10px 16px calc(12px);background:var(--ctrl)}
+#pg{font-size:13px;color:var(--mut);text-align:center;margin-bottom:4px}
+#pos{width:100%;accent-color:var(--acc);margin:2px 0 10px}
+#ctrl .row{display:flex;gap:18px;align-items:center;justify-content:center}
+.rb{width:62px;height:62px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--bd)}
+.rb svg{width:28px;height:28px}
+.rb:active,.pb:active{transform:scale(.95)}
+.pb{height:68px;min-width:170px;border-radius:34px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:20px;font-weight:700;
+  background:var(--acc);color:var(--accTxt);border:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.pb svg{width:30px;height:30px}
+/* pannelli che salgono dal basso */
+.bk{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.bk.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:80%;overflow:auto;background:var(--ctrl);color:var(--txt);
+  border-radius:22px 22px 0 0;padding:10px 18px calc(22px + env(safe-area-inset-bottom));
+  transform:translateY(105%);transition:transform .25s ease;z-index:20;box-shadow:0 -8px 30px rgba(0,0,0,.35)}
+.sheet.open{transform:none}
+.grab{width:42px;height:5px;border-radius:3px;background:var(--bd);margin:0 auto 10px}
+.sheet h2{font-size:18px;margin:4px 0 6px}
+.sheet h3{font-size:13px;margin:18px 0 6px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.sheet select{width:100%;background:var(--card);color:var(--txt);border:1px solid var(--bd);border-radius:10px;padding:12px;font-size:16px}
+.sheet input[type=range]{width:100%;accent-color:var(--acc)}
+.sheet label{display:block;font-size:14px;color:var(--mut);margin:10px 0 2px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:9px 14px;border-radius:20px;font-size:15px}
+.chip.on{background:var(--acc);color:var(--accTxt);border-color:transparent;font-weight:700}
+.sws{display:flex;gap:14px}
+.sw{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--mut);background:none;border:none;padding:0}
+.sw i{display:block;width:48px;height:48px;border-radius:50%;border:3px solid var(--bd)}
+.sw.on i{border-color:var(--acc)}
+.sw.on{color:var(--txt);font-weight:600}
+.chk{display:flex!important;gap:10px;align-items:center;color:var(--txt)!important;font-size:15px!important;margin-top:14px!important}
+.chk input{width:22px;height:22px;accent-color:var(--acc)}
+.goto{display:flex;gap:8px;margin:8px 0 12px}
+.goto input{flex:1;font-size:18px;padding:10px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--txt);min-width:0}
+#pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px}
+#pgrid button{padding:10px 0;text-align:center}
+#pgrid.list{display:block}
+#pgrid.list button{display:block;width:100%;text-align:left;margin-bottom:6px;padding:12px 14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pgrid button.on{background:var(--acc);color:var(--accTxt);border-color:transparent;font-weight:700}
 </style>
 </head>
 <body>
@@ -60,35 +101,86 @@ button.acc{background:var(--acc);color:#1a1200;border:none;font-weight:700}
 
 <div id="v-read" class="view">
   <header>
-    <button id="back">‹ Libreria</button>
-    <h1 id="rtitle" style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h1>
+    <button id="back" class="ib" aria-label="Torna alla libreria">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1 id="rtitle" class="t"></h1>
+    <button id="pages" class="ib" aria-label="Pagine">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    </button>
+    <button id="gear" class="ib" aria-label="Impostazioni">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
   </header>
+
   <div id="text"></div>
+
   <div id="ctrl">
     <div id="pg"></div>
     <input type="range" id="pos" min="0" value="0">
     <div class="row">
-      <button id="prev">⏮</button>
-      <button id="play" class="acc">▶ Leggi</button>
-      <button id="next">⏭</button>
-      <button id="gear">⚙︎</button>
-    </div>
-    <div id="set">
-      <label id="vlabel">Voce</label><select id="voice"></select>
-      <button id="demo" style="width:100%;margin-top:8px">🔊 Prova la voce</button>
-      <label>Velocità: <span id="rv"></span></label>
-      <input type="range" id="rate" min="0.5" max="2" step="0.05">
-      <label>Tono: <span id="pv"></span></label>
-      <input type="range" id="pitch" min="0.5" max="1.5" step="0.05">
-      <label style="display:flex;gap:8px;align-items:center;color:var(--txt);font-size:15px;margin-top:12px">
-        <input type="checkbox" id="sym"> Leggi simboli e caratteri speciali (% &amp; € @ # …)</label>
-      <label>Timer di spegnimento</label>
-      <select id="sleep">
-        <option value="0">Nessuno</option><option value="15">15 minuti</option>
-        <option value="30">30 minuti</option><option value="60">60 minuti</option>
-      </select>
+      <button id="prev" class="rb" aria-label="Frase precedente">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2.2v12H6zM9.8 12L18 6v12z"/></svg>
+      </button>
+      <button id="play" class="pb"></button>
+      <button id="next" class="rb" aria-label="Frase successiva">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.8 6H18v12h-2.2zM14.2 12L6 18V6z"/></svg>
+      </button>
     </div>
   </div>
+</div>
+
+<div id="bk" class="bk"></div>
+
+<!-- Pannello PAGINE -->
+<div id="sheet-pages" class="sheet">
+  <div class="grab"></div>
+  <h2 id="ph">Pagine</h2>
+  <div class="goto">
+    <input type="number" id="gp" inputmode="numeric" min="1" placeholder="Numero">
+    <button id="gogo" class="acc">Vai</button>
+  </div>
+  <div id="pgrid"></div>
+</div>
+
+<!-- Pannello IMPOSTAZIONI -->
+<div id="sheet-set" class="sheet">
+  <div class="grab"></div>
+  <h2>Impostazioni</h2>
+
+  <h3>Voce</h3>
+  <label id="vlabel" style="margin-top:0">Voce</label>
+  <select id="voice"></select>
+  <button id="demo" style="width:100%;margin-top:8px">🔊 Prova la voce</button>
+
+  <h3>Stile della voce</h3>
+  <div class="chips" id="chips">
+    <button class="chip" data-r="1" data-p="1">Naturale</button>
+    <button class="chip" data-r="0.95" data-p="0.92">Calda</button>
+    <button class="chip" data-r="0.9" data-p="0.85">Narratore</button>
+    <button class="chip" data-r="1.08" data-p="1.08">Vivace</button>
+  </div>
+  <label>Velocità: <span id="rv"></span></label>
+  <input type="range" id="rate" min="0.5" max="2" step="0.05">
+  <label>Tono: <span id="pv"></span></label>
+  <input type="range" id="pitch" min="0.5" max="1.5" step="0.05">
+  <label class="chk"><input type="checkbox" id="sym"> Leggi simboli e caratteri speciali (% &amp; € @ # …)</label>
+
+  <h3>Sfondo</h3>
+  <div class="sws" id="sws">
+    <button class="sw" data-t="dark"><i style="background:#14161a"></i>Nero</button>
+    <button class="sw" data-t="white"><i style="background:#ffffff"></i>Bianco</button>
+    <button class="sw" data-t="gray"><i style="background:#e3e3df"></i>Grigio</button>
+    <button class="sw" data-t="sepia"><i style="background:#f4ecd8"></i>Seppia</button>
+  </div>
+  <label>Dimensione del testo: <span id="fsv"></span></label>
+  <input type="range" id="fs" min="15" max="32" step="1">
+
+  <h3>Timer</h3>
+  <select id="sleep">
+    <option value="0">Nessun timer di spegnimento</option><option value="15">Spegni dopo 15 minuti</option>
+    <option value="30">Spegni dopo 30 minuti</option><option value="60">Spegni dopo 60 minuti</option>
+  </select>
 </div>
 
 <script src="lib/jszip.min.js"></script>

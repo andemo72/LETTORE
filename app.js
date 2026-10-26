@@ -87,7 +87,7 @@
     }).then(function (pdf) {
       var out = [];
       function page(n) {
-        if (n > pdf.numPages) return Promise.resolve(out.join('\n\n'));
+        if (n > pdf.numPages) return Promise.resolve(out);
         onProgress('PDF: pagina ' + n + ' di ' + pdf.numPages);
         return pdf.getPage(n).then(function (p) { return p.getTextContent(); })
           .then(function (tc) {
@@ -96,7 +96,7 @@
               var it = tc.items[i];
               s += it.str + (it.hasEOL ? (/[A-Za-zÀ-ÿ]-$/.test(it.str) ? '' : ' ') : '');
             }
-            out.push(s.replace(/\s+/g, ' ').trim());
+            out.push({ label: 'Pagina ' + n, p: n, text: s.replace(/\s+/g, ' ').trim() });
             return page(n + 1);
           });
       }
@@ -127,12 +127,12 @@
             }
             var out = [];
             function next(n) {
-              if (n >= paths.length) return Promise.resolve(out.join('\n\n'));
+              if (n >= paths.length) return Promise.resolve(out);
               var f = zip.file(paths[n]);
               if (!f) return next(n + 1);
               return f.async('string').then(function (x) {
                 var d = new DOMParser().parseFromString(x, 'text/html');
-                out.push(htmlDocToText(d));
+                out.push({ label: 'c', p: 0, text: htmlDocToText(d) });
                 return next(n + 1);
               });
             }
@@ -153,21 +153,34 @@
     var name = file.name || 'Senza titolo';
     var ext = (name.split('.').pop() || '').toLowerCase();
     var title = name.replace(/\.[^.]+$/, '');
+    var kind = 'sez';
     var p;
+    function one(t) { return [{ label: '', p: 0, text: t }]; }
     setStatus('Leggo: ' + name + ' …');
-    if (ext === 'pdf') p = readPdf(file, setStatus);
-    else if (ext === 'docx') p = readDocx(file);
-    else if (ext === 'epub') p = readEpub(file, function (t) { title = t; });
-    else if (ext === 'html' || ext === 'htm') p = file.text().then(readHtmlString);
+    if (ext === 'pdf') { kind = 'pdf'; p = readPdf(file, setStatus); }
+    else if (ext === 'docx') p = readDocx(file).then(one);
+    else if (ext === 'epub') { kind = 'epub'; p = readEpub(file, function (t) { title = t; }); }
+    else if (ext === 'html' || ext === 'htm') p = file.text().then(readHtmlString).then(one);
     else if (ext === 'doc') return Promise.reject(new Error('Il vecchio formato .doc non è supportato: salvalo come .docx da Word/Pages.'));
-    else p = readTxt(file);
-    return p.then(function (raw) {
-      var text = cleanText(raw);
+    else p = readTxt(file).then(one);
+    return p.then(function (secs) {
+      var parts = [], marks = [], n = 0, k = 0;
+      secs.forEach(function (sc) {
+        var c = cleanText(sc.text);
+        if (!c) return;
+        var cnt = splitSentences(c).length;
+        if (!cnt) return;
+        if (kind === 'pdf') marks.push({ n: sc.label, p: sc.p, i: n });
+        else if (kind === 'epub') { k++; marks.push({ n: 'Capitolo ' + k, p: k, i: n }); }
+        parts.push(c); n += cnt;
+      });
+      var text = parts.join('\n\n');
       if (text.length < 20) throw new Error('Nessun testo trovato (forse è un PDF scansionato, cioè fatto di sole immagini).');
       var id = 'b' + Date.now() + Math.floor(Math.random() * 1000);
       var total = splitSentences(text).length;
       return dbPut('texts', { id: id, text: text }).then(function () {
-        return dbPut('books', { id: id, title: title, pos: 0, total: total, added: Date.now(), last: Date.now() });
+        return dbPut('books', { id: id, title: title, pos: 0, total: total, kind: kind,
+          marks: marks, added: Date.now(), last: Date.now() });
       });
     });
   }
@@ -275,8 +288,9 @@
   var book = null, sents = [], cur = 0, playing = false, gen = 0;
   var pageStart = -1, spans = [];
   var voices = [], voice = null;
+  var marks = [], mkind = 'sez';
   var sleepTimer = null, wake = null;
-  var cfg = { voiceURI: '', rate: 1, pitch: 1, symbols: true };
+  var cfg = { voiceURI: '', rate: 1, pitch: 1, symbols: true, theme: 'dark', fs: 19, pauseMs: 400 };
   try { var sv = JSON.parse(localStorage.getItem('lettore-cfg')); if (sv) for (var k in sv) cfg[k] = sv[k]; } catch (e) {}
   function saveCfg() { try { localStorage.setItem('lettore-cfg', JSON.stringify(cfg)); } catch (e) {} }
 
@@ -284,11 +298,19 @@
     Promise.all([dbGet('books', id), dbGet('texts', id)]).then(function (r) {
       book = r[0];
       sents = splitSentences(r[1].text);
+      if (book.marks && book.marks.length) {
+        marks = book.marks.filter(function (m) { return m.i < sents.length; });
+        mkind = book.kind || 'sez';
+      } else {
+        marks = []; mkind = 'sez';
+        for (var q = 0, z = 1; q < sents.length; q += 40, z++) marks.push({ n: 'Sezione ' + z, p: z, i: q });
+      }
       cur = Math.min(book.pos || 0, Math.max(0, sents.length - 1));
       $('rtitle').textContent = book.title;
       $('pos').max = Math.max(0, sents.length - 1);
       pageStart = -1;
       showView('v-read');
+      updatePlayBtn();
       show(cur, true);
     });
   }
@@ -316,6 +338,15 @@
     box.scrollTop = 0;
   }
 
+  function markAt(i) {
+    var lo = 0, hi = marks.length - 1, r = -1;
+    while (lo <= hi) {
+      var m = (lo + hi) >> 1;
+      if (marks[m].i <= i) { r = m; lo = m + 1; } else hi = m - 1;
+    }
+    return r;
+  }
+
   function show(i, instant) {
     cur = i;
     var start = Math.floor(i / PAGE) * PAGE;
@@ -328,7 +359,13 @@
     }
     $('pos').value = i;
     var pct = sents.length ? Math.round(100 * i / sents.length) : 0;
-    $('pg').textContent = 'Frase ' + (i + 1) + ' di ' + sents.length + ' · ' + pct + '%';
+    var mk = markAt(i), where = '';
+    if (mk >= 0) {
+      where = marks[mk].n;
+      if (mkind === 'pdf') where += ' di ' + marks[marks.length - 1].p;
+      where += ' · ';
+    }
+    $('pg').textContent = where + pct + '%';
     if (book) {
       book.pos = i; book.total = sents.length; book.last = Date.now();
       dbPut('books', book);
@@ -392,11 +429,18 @@
     u.onstart = function () {
       if (g !== gen) return;
       show(idx);
-      if (!enqueue(idx + 1, g)) finalIdx = idx;
+      var nx = idx + 1;
+      // a fine paragrafo non metto in coda la frase dopo: lascio una piccola pausa, come un lettore umano
+      if (nx < sents.length && sents[nx].br && cfg.pauseMs > 0) return;
+      if (!enqueue(nx, g)) finalIdx = idx;
     };
     u.onend = function () {
       if (g !== gen || !playing) return;
-      if (idx === finalIdx || (lastQ <= idx && !enqueue(idx + 1, g))) pause();
+      if (idx === finalIdx) { pause(); return; }
+      if (lastQ > idx) return;
+      var nx = idx + 1;
+      function go() { if (g === gen && playing && !enqueue(nx, g)) pause(); }
+      if (nx < sents.length && sents[nx].br && cfg.pauseMs > 0) setTimeout(go, cfg.pauseMs); else go();
     };
     u.onerror = function (e) {
       if (g !== gen) return;
@@ -428,14 +472,111 @@
     releaseWake();
   }
 
-  function updatePlayBtn() { $('play').textContent = playing ? '⏸ Pausa' : '▶ Leggi'; }
+  var ICO_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  var ICO_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+  function updatePlayBtn() {
+    $('play').innerHTML = (playing ? ICO_PAUSE : ICO_PLAY) + '<span>' + (playing ? 'Pausa' : 'Leggi') + '</span>';
+  }
 
   $('play').onclick = function () { if (playing) pause(); else speak(cur); };
   $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) speak(n); else show(n); };
   $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) speak(n); else show(n); };
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
-  $('back').onclick = function () { pause(); clearSleep(); showView('v-lib'); renderList(); };
-  $('gear').onclick = function () { $('set').classList.toggle('on'); };
+  $('back').onclick = function () { pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); };
+
+  // ---------- Pannelli che salgono dal basso ----------
+  function closeSheets() {
+    $('sheet-pages').classList.remove('open');
+    $('sheet-set').classList.remove('open');
+    $('bk').classList.remove('on');
+  }
+  function openSheet(id) {
+    closeSheets();
+    $(id).classList.add('open');
+    $('bk').classList.add('on');
+  }
+  $('bk').onclick = closeSheets;
+  $('gear').onclick = function () { openSheet('sheet-set'); };
+
+  // ---------- Pagine ----------
+  function goMark(k) {
+    closeSheets();
+    var i = marks[k].i;
+    if (playing) speak(i); else show(i, true);
+  }
+  $('pages').onclick = function () {
+    if (!marks.length) return;
+    var grid = $('pgrid');
+    grid.innerHTML = '';
+    $('ph').textContent = mkind === 'pdf' ? 'Pagine' : (mkind === 'epub' ? 'Capitoli' : 'Sezioni');
+    $('gp').value = '';
+    $('gp').placeholder = 'Numero (1-' + marks[marks.length - 1].p + ')';
+    grid.className = mkind === 'epub' ? 'list' : '';
+    var cm = markAt(cur);
+    marks.forEach(function (m, k) {
+      var b = document.createElement('button');
+      b.textContent = mkind === 'epub' ? m.n : m.p;
+      if (k === cm) b.className = 'on';
+      b.onclick = function () { goMark(k); };
+      grid.appendChild(b);
+    });
+    openSheet('sheet-pages');
+    setTimeout(function () { var on = grid.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' }); }, 60);
+  };
+  function gotoNumber() {
+    var n = parseInt($('gp').value, 10);
+    if (!n || n < 1) return;
+    var k = marks.length - 1;
+    for (var j = 0; j < marks.length; j++) if (marks[j].p >= n) { k = j; break; }
+    goMark(k);
+  }
+  $('gogo').onclick = gotoNumber;
+  $('gp').onkeydown = function (e) { if (e.key === 'Enter') gotoNumber(); };
+
+  // ---------- Sfondo e dimensione del testo ----------
+  var THEMES = { dark: '#14161a', white: '#ffffff', gray: '#e3e3df', sepia: '#f4ecd8' };
+  function applyTheme(t) {
+    if (!THEMES[t]) t = 'dark';
+    cfg.theme = t;
+    document.documentElement.setAttribute('data-theme', t);
+    $('tc').setAttribute('content', THEMES[t]);
+    var sw = document.querySelectorAll('#sws .sw');
+    for (var i = 0; i < sw.length; i++) sw[i].classList.toggle('on', sw[i].getAttribute('data-t') === t);
+  }
+  (function () {
+    var sw = document.querySelectorAll('#sws .sw');
+    for (var i = 0; i < sw.length; i++) sw[i].onclick = function () { applyTheme(this.getAttribute('data-t')); saveCfg(); };
+    applyTheme(cfg.theme);
+    // fascia scura sotto l'orologio dell'iPhone: con gli sfondi chiari l'orologio bianco resterebbe illeggibile
+    var sb = document.createElement('div');
+    sb.style.cssText = 'position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:#14161a;z-index:30;pointer-events:none';
+    document.body.appendChild(sb);
+  })();
+  function applyFs() { $('text').style.fontSize = cfg.fs + 'px'; $('fsv').textContent = cfg.fs + ' px'; $('fs').value = cfg.fs; }
+  applyFs();
+  $('fs').oninput = function () { cfg.fs = parseInt(this.value, 10); applyFs(); };
+  $('fs').onchange = function () { saveCfg(); var el = spans[cur - pageStart]; if (el) el.scrollIntoView({ block: 'center' }); };
+
+  // ---------- Stili di voce (Naturale, Calda, ...) ----------
+  function syncChips() {
+    var cs = document.querySelectorAll('#chips .chip');
+    for (var i = 0; i < cs.length; i++) {
+      var on = Math.abs(parseFloat(cs[i].getAttribute('data-r')) - cfg.rate) < 0.001 &&
+               Math.abs(parseFloat(cs[i].getAttribute('data-p')) - cfg.pitch) < 0.001;
+      cs[i].classList.toggle('on', on);
+    }
+  }
+  (function () {
+    var cs = document.querySelectorAll('#chips .chip');
+    for (var i = 0; i < cs.length; i++) cs[i].onclick = function () {
+      cfg.rate = parseFloat(this.getAttribute('data-r'));
+      cfg.pitch = parseFloat(this.getAttribute('data-p'));
+      $('rate').value = cfg.rate; $('rv').textContent = cfg.rate + '×';
+      $('pitch').value = cfg.pitch; $('pv').textContent = cfg.pitch;
+      saveCfg(); syncChips();
+      if (playing) speak(cur);
+    };
+  })();
 
   // ---------- Voci e impostazioni ----------
   function langName(code) {
@@ -479,7 +620,12 @@
     });
     var idx = -1;
     for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === cfg.voiceURI) idx = i;
-    if (idx < 0) idx = 0; // la prima è nel gruppo italiano
+    if (idx < 0) {
+      idx = 0; // la prima è nel gruppo italiano
+      for (var q = 0; q < voices.length; q++) {
+        if (voices[q].lang.toLowerCase().indexOf('it') === 0 && /premium|enhanced|migliorat/i.test(voices[q].name)) { idx = q; break; }
+      }
+    }
     sel.value = idx; voice = voices[idx];
     $('vlabel').textContent = 'Voce (' + voices.length + ' sul telefono)';
   }
@@ -511,18 +657,20 @@
     cfg.voiceURI = voice.voiceURI; saveCfg();
     if (playing) speak(cur);
   };
+  $('rate').step = '0.01'; $('pitch').step = '0.01';   // passo fine: gli stili di voce usano valori come 0.92
   $('rate').value = cfg.rate; $('rv').textContent = cfg.rate + '×';
   $('pitch').value = cfg.pitch; $('pv').textContent = cfg.pitch;
   $('rate').onchange = function () {
-    cfg.rate = parseFloat(this.value); saveCfg(); $('rv').textContent = cfg.rate + '×';
+    cfg.rate = parseFloat(this.value); saveCfg(); $('rv').textContent = cfg.rate + '×'; syncChips();
     if (playing) speak(cur);
   };
   $('rate').oninput = function () { $('rv').textContent = this.value + '×'; };
   $('pitch').onchange = function () {
-    cfg.pitch = parseFloat(this.value); saveCfg(); $('pv').textContent = cfg.pitch;
+    cfg.pitch = parseFloat(this.value); saveCfg(); $('pv').textContent = cfg.pitch; syncChips();
     if (playing) speak(cur);
   };
   $('pitch').oninput = function () { $('pv').textContent = this.value; };
+  syncChips();
 
   // ---------- Timer di spegnimento ----------
   function clearSleep() { if (sleepTimer) { clearTimeout(sleepTimer); sleepTimer = null; } $('sleep').value = '0'; }
@@ -545,6 +693,7 @@
   });
 
   // ---------- Avvio ----------
+  updatePlayBtn();
   openDB().then(function () {
     renderList();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
