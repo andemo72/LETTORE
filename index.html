@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lettore">
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Lettore</title>
+<style>
+:root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--hl:#3a3320;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif}
+body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.view{display:none;height:100%;flex-direction:column}
+.view.on{display:flex}
+header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #2a2e36}
+header h1{font-size:20px;margin:0;flex:1}
+button{font:inherit;color:var(--txt);background:var(--card);border:1px solid #2f343d;border-radius:12px;padding:10px 14px}
+button.acc{background:var(--acc);color:#1a1200;border:none;font-weight:700}
+#list{flex:1;overflow:auto;padding:12px 16px}
+.book{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
+.book .t{flex:1;min-width:0}
+.book .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book .t small{color:var(--mut)}
+.bar{height:4px;background:#2f343d;border-radius:2px;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:2px}
+.empty{color:var(--mut);text-align:center;margin-top:60px;line-height:1.6;padding:0 20px}
+#status{padding:8px 16px;color:var(--acc);font-size:14px;display:none}
+#text{flex:1;overflow:auto;padding:16px;font-size:19px;line-height:1.65;font-family:Georgia,serif}
+.s{border-radius:4px}
+.s.cur{background:var(--hl);box-shadow:0 0 0 3px var(--hl);color:#fff}
+#ctrl{border-top:1px solid #2a2e36;padding:10px 12px;background:#181b20}
+#ctrl .row{display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px}
+#ctrl .row button{min-width:52px;font-size:20px}
+#play{min-width:90px!important}
+#set{display:none;padding-top:6px}
+#set.on{display:block}
+#set label{display:block;font-size:13px;color:var(--mut);margin:8px 0 2px}
+#set input[type=range],#set select{width:100%}
+#set select{background:var(--card);color:var(--txt);border:1px solid #2f343d;border-radius:10px;padding:10px;font-size:16px}
+#pg{font-size:12px;color:var(--mut);text-align:center;margin-bottom:6px}
+#pos{width:100%}
+</style>
+</head>
+<body>
+
+<div id="v-lib" class="view on">
+  <header><h1>📚 La mia libreria</h1>
+    <button class="acc" id="add">+ Aggiungi</button></header>
+  <div id="status"></div>
+  <div id="list"></div>
+  <input type="file" id="file" multiple style="display:none"
+         accept=".txt,.pdf,.epub,.docx,.md,.html,.htm,text/plain,application/pdf,application/epub+zip">
+</div>
+
+<div id="v-read" class="view">
+  <header>
+    <button id="back">‹ Libreria</button>
+    <h1 id="rtitle" style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h1>
+  </header>
+  <div id="text"></div>
+  <div id="ctrl">
+    <div id="pg"></div>
+    <input type="range" id="pos" min="0" value="0">
+    <div class="row">
+      <button id="prev">⏮</button>
+      <button id="play" class="acc">▶ Leggi</button>
+      <button id="next">⏭</button>
+      <button id="gear">⚙︎</button>
+    </div>
+    <div id="set">
+      <label>Voce</label><select id="voice"></select>
+      <label>Velocità: <span id="rv"></span></label>
+      <input type="range" id="rate" min="0.5" max="2" step="0.05">
+      <label>Tono: <span id="pv"></span></label>
+      <input type="range" id="pitch" min="0.5" max="1.5" step="0.05">
+      <label>Timer di spegnimento</label>
+      <select id="sleep">
+        <option value="0">Nessuno</option><option value="15">15 minuti</option>
+        <option value="30">30 minuti</option><option value="60">60 minuti</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script src="lib/jszip.min.js"></script>
+<script src="lib/pdf.min.js"></script>
+<script src="lib/mammoth.browser.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
