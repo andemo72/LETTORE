@@ -1,5 +1,6 @@
-// Service worker: salva i file dell'app nel telefono per farla funzionare offline
-var CACHE = 'lettore-v1';
+// Service worker: salva i file dell'app nel telefono per farla funzionare offline.
+// Strategia: prima prova la rete (così gli aggiornamenti arrivano da soli), se è offline usa la copia salvata.
+var CACHE = 'lettore-v2';
 var FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png',
@@ -22,8 +23,14 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
-      return hit || fetch(e.request);
+    fetch(e.request).then(function (resp) {
+      if (resp && resp.ok) {
+        var copy = resp.clone();
+        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+      }
+      return resp;
+    }).catch(function () {
+      return caches.match(e.request, { ignoreSearch: true });
     })
   );
 });

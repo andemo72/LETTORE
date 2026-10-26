@@ -51,7 +51,9 @@
 
   // ---------- Estrazione del testo dai file ----------
   function cleanText(t) {
+    try { t = t.normalize('NFKC'); } catch (e) {}
     return t.replace(/\r/g, '')
+      .replace(/[\u00ad\u200b-\u200d\u2060\ufeff]/g, '')
       .replace(/[ \t ]+/g, ' ')
       .replace(/ *\n */g, '\n')
       .replace(/\n{3,}/g, '\n\n')
@@ -92,7 +94,7 @@
             var s = '';
             for (var i = 0; i < tc.items.length; i++) {
               var it = tc.items[i];
-              s += it.str + (it.hasEOL ? ' ' : '');
+              s += it.str + (it.hasEOL ? (/[A-Za-zÀ-ÿ]-$/.test(it.str) ? '' : ' ') : '');
             }
             out.push(s.replace(/\s+/g, ' ').trim());
             return page(n + 1);
@@ -274,8 +276,8 @@
   var pageStart = -1, spans = [];
   var voices = [], voice = null;
   var sleepTimer = null, wake = null;
-  var cfg = { voiceURI: '', rate: 1, pitch: 1 };
-  try { var sv = JSON.parse(localStorage.getItem('lettore-cfg')); if (sv) cfg = sv; } catch (e) {}
+  var cfg = { voiceURI: '', rate: 1, pitch: 1, symbols: true };
+  try { var sv = JSON.parse(localStorage.getItem('lettore-cfg')); if (sv) for (var k in sv) cfg[k] = sv[k]; } catch (e) {}
   function saveCfg() { try { localStorage.setItem('lettore-cfg', JSON.stringify(cfg)); } catch (e) {} }
 
   function openBook(id) {
@@ -341,28 +343,81 @@
     }
   });
 
+  // ---- Trasformazione del testo per la voce (solo per l'audio, lo schermo resta uguale) ----
+  var SYM_IT = { '%': ' per cento ', '&': ' e ', '€': ' euro ', '$': ' dollari ', '£': ' sterline ',
+    '@': ' chiocciola ', '#': ' cancelletto ', '+': ' più ', '=': ' uguale ', '<': ' minore di ',
+    '>': ' maggiore di ', '/': ' barra ', '\\': ' barra rovesciata ', '*': ' asterisco ',
+    '_': ' trattino basso ', '^': ' accento circonflesso ', '~': ' tilde ', '|': ' barra verticale ',
+    '°': ' gradi ', '§': ' paragrafo ', '©': ' copyright ', '®': ' marchio registrato ',
+    '™': ' marchio ', '×': ' per ', '÷': ' diviso ', '±': ' più o meno ', '≤': ' minore o uguale a ',
+    '≥': ' maggiore o uguale a ', '≠': ' diverso da ', '∞': ' infinito ', '→': ' freccia ',
+    '←': ' freccia ', '•': ' ', '⁄': ' su ' };
+  var SYM_EN = { '%': ' percent ', '&': ' and ', '€': ' euro ', '$': ' dollars ', '£': ' pounds ',
+    '@': ' at ', '#': ' hash ', '+': ' plus ', '=': ' equals ', '<': ' less than ',
+    '>': ' greater than ', '/': ' slash ', '\\': ' backslash ', '*': ' asterisk ',
+    '_': ' underscore ', '^': ' caret ', '~': ' tilde ', '|': ' bar ', '°': ' degrees ',
+    '§': ' section ', '©': ' copyright ', '®': ' registered ', '™': ' trademark ', '×': ' times ',
+    '÷': ' divided by ', '±': ' plus or minus ', '≤': ' less than or equal to ',
+    '≥': ' greater than or equal to ', '≠': ' not equal to ', '∞': ' infinity ', '→': ' arrow ',
+    '←': ' arrow ', '•': ' ', '⁄': ' over ' };
+  var SYM_RE = /[%&€$£@#+=<>\/\\*_^~|°§©®™×÷±≤≥≠∞→←•⁄]/g;
+
+  function spokenText(i) {
+    var t = sents[i].t;
+    try { t = t.normalize('NFKC'); } catch (e) {}              // ligature (ﬁ, ﬂ) e simboli strani -> normali
+    t = t.replace(/[­​-‍⁠﻿]/g, '');   // caratteri invisibili
+    t = t.replace(/([\-_=*~#•·.])\1{2,}/g, ', ');              // *** --- ... diventano una pausa
+    // PAROLE IN STAMPATELLO: in minuscolo, altrimenti la voce le sillaba lettera per lettera
+    t = t.replace(/(^|[^A-Za-zÀ-ÿ])([A-ZÀ-ÖØ-Þ]{4,})(?![A-Za-zÀ-ÿ])/g, function (m, a, b) { return a + b.toLowerCase(); });
+    if (cfg.symbols) {
+      var lang = (voice && voice.lang ? voice.lang : 'it').toLowerCase().substring(0, 2);
+      var map = lang === 'it' ? SYM_IT : (lang === 'en' ? SYM_EN : null);
+      if (map) t = t.replace(SYM_RE, function (c) { return map[c] || ' '; });
+    }
+    t = t.replace(/\s+/g, ' ').trim();
+    return /[\p{L}\p{N}]/u.test(t) ? t : '';   // frasi di soli simboli muti: saltate
+  }
+
+  // ---- Lettura fluida: la frase successiva è già in coda prima che finisca la corrente ----
+  var finalIdx = -1, lastQ = -1, utts = [];
+
+  function enqueue(i, g) {
+    var txt = '';
+    while (i < sents.length) { txt = spokenText(i); if (txt) break; i++; }
+    if (i >= sents.length) return false;
+    var idx = i;
+    var u = new SpeechSynthesisUtterance(txt);
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'it-IT'; }
+    u.rate = cfg.rate; u.pitch = cfg.pitch;
+    u.onstart = function () {
+      if (g !== gen) return;
+      show(idx);
+      if (!enqueue(idx + 1, g)) finalIdx = idx;
+    };
+    u.onend = function () {
+      if (g !== gen || !playing) return;
+      if (idx === finalIdx || (lastQ <= idx && !enqueue(idx + 1, g))) pause();
+    };
+    u.onerror = function (e) {
+      if (g !== gen) return;
+      if (e.error === 'interrupted' || e.error === 'canceled') return;
+      setTimeout(function () { if (g === gen && playing) speak(idx + 1); }, 200);
+    };
+    lastQ = idx;
+    utts.push(u); if (utts.length > 6) utts.shift();   // tiene le frasi "vive" in memoria
+    window.speechSynthesis.speak(u);
+    return true;
+  }
+
   function speak(i) {
     if (i < 0 || i >= sents.length) { pause(); return; }
     playing = true;
     updatePlayBtn();
     show(i);
     var g = ++gen;
-    var synth = window.speechSynthesis;
-    synth.cancel();
-    setTimeout(function () {
-      if (g !== gen) return;
-      var u = new SpeechSynthesisUtterance(sents[i].t);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'it-IT'; }
-      u.rate = cfg.rate; u.pitch = cfg.pitch;
-      u.onend = function () { if (g === gen && playing) speak(i + 1); };
-      u.onerror = function (e) {
-        if (g !== gen) return;
-        if (e.error === 'interrupted' || e.error === 'canceled') return;
-        setTimeout(function () { if (g === gen && playing) speak(i + 1); }, 200);
-      };
-      window._u = u; // evita che il telefono "dimentichi" la frase mentre la legge
-      synth.speak(u);
-    }, 60);
+    finalIdx = -1; lastQ = -1;
+    window.speechSynthesis.cancel();
+    setTimeout(function () { if (g === gen) enqueue(i, g); }, 80);
     requestWake();
   }
 
@@ -383,33 +438,73 @@
   $('gear').onclick = function () { $('set').classList.toggle('on'); };
 
   // ---------- Voci e impostazioni ----------
+  function langName(code) {
+    try {
+      var n = new Intl.DisplayNames(['it'], { type: 'language' }).of(code);
+      if (n && n !== code) return n.charAt(0).toUpperCase() + n.slice(1);
+    } catch (e) {}
+    return code;
+  }
+  var lastCount = -1;
   function loadVoices() {
     var all = window.speechSynthesis.getVoices();
-    if (!all.length) return;
-    voices = all.slice().sort(function (a, b) {
-      var ai = a.lang.toLowerCase().indexOf('it') === 0 ? 0 : 1;
-      var bi = b.lang.toLowerCase().indexOf('it') === 0 ? 0 : 1;
+    if (!all.length || all.length === lastCount) return;
+    lastCount = all.length;
+    var seen = {}, groups = {};
+    all.forEach(function (v) {
+      if (seen[v.voiceURI]) return;
+      seen[v.voiceURI] = 1;
+      var lg = (v.lang || 'und').replace('_', '-');
+      (groups[lg] = groups[lg] || []).push(v);
+    });
+    var langs = Object.keys(groups).sort(function (a, b) {
+      var ai = a.toLowerCase().indexOf('it') === 0 ? 0 : 1;
+      var bi = b.toLowerCase().indexOf('it') === 0 ? 0 : 1;
       if (ai !== bi) return ai - bi;
-      return (a.lang + a.name).localeCompare(b.lang + b.name);
+      return langName(a).localeCompare(langName(b), 'it');
     });
     var sel = $('voice');
     sel.innerHTML = '';
-    voices.forEach(function (v, i) {
-      var o = document.createElement('option');
-      o.value = i; o.textContent = v.name + ' (' + v.lang + ')';
-      sel.appendChild(o);
+    voices = [];
+    langs.forEach(function (lg) {
+      var og = document.createElement('optgroup');
+      og.label = langName(lg) + ' · ' + lg;
+      groups[lg].sort(function (a, b) { return a.name.localeCompare(b.name); });
+      groups[lg].forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = voices.length; o.textContent = v.name;
+        og.appendChild(o); voices.push(v);
+      });
+      sel.appendChild(og);
     });
     var idx = -1;
     for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === cfg.voiceURI) idx = i;
-    if (idx < 0) idx = 0;
+    if (idx < 0) idx = 0; // la prima è nel gruppo italiano
     sel.value = idx; voice = voices[idx];
+    $('vlabel').textContent = 'Voce (' + voices.length + ' sul telefono)';
   }
   if ('speechSynthesis' in window) {
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
+    var vTries = 0;
+    var vTimer = setInterval(function () { loadVoices(); if (++vTries > 20) clearInterval(vTimer); }, 500);
   } else {
     alert('Questo browser non supporta la sintesi vocale.');
   }
+
+  $('sym').checked = cfg.symbols;
+  $('sym').onchange = function () {
+    cfg.symbols = this.checked; saveCfg();
+    if (playing) speak(cur);
+  };
+  $('demo').onclick = function () {
+    pause();
+    var u = new SpeechSynthesisUtterance((spokenText(cur) || 'Prova della voce').substring(0, 200));
+    if (voice) { u.voice = voice; u.lang = voice.lang; }
+    u.rate = cfg.rate; u.pitch = cfg.pitch;
+    window._d = u;
+    window.speechSynthesis.speak(u);
+  };
 
   $('voice').onchange = function () {
     voice = voices[parseInt(this.value, 10)];
