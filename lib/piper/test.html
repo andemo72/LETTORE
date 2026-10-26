@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prova voci Piper</title>
+<style>
+:root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--bd:#343944}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif;
+  padding:calc(14px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));line-height:1.45}
+h1{font-size:20px;margin:0 0 4px}
+p.s{color:var(--mut);margin:0 0 14px;font-size:14px}
+label{display:block;color:var(--mut);font-size:13px;margin:14px 0 4px}
+select,textarea,button{font:inherit;color:var(--txt);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;width:100%}
+textarea{min-height:130px;font-size:16px}
+button{font-weight:700;margin-top:10px}
+button.acc{background:var(--acc);color:#1a1200;border:none;font-size:18px;padding:16px}
+.bar{height:8px;background:var(--bd);border-radius:4px;margin-top:8px;display:none;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+#info{font-size:14px;color:var(--mut);margin-top:8px;min-height:20px}
+#sent{margin-top:14px;font-family:Georgia,serif;font-size:18px}
+#sent span{padding:1px 2px;border-radius:4px}
+#sent span.cur{background:#3a3320;color:#fff}
+#log{margin-top:14px;font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--mut);white-space:pre-wrap;background:#0f1114;border-radius:10px;padding:10px;min-height:60px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+input[type=range]{width:100%;accent-color:var(--acc)}
+</style>
+</head>
+<body>
+<h1>🎙️ Prova voci Piper</h1>
+<p class="s">Voci neurali gratuite che girano nel telefono. Scarica una voce, incolla un testo e premi Leggi.</p>
+
+<label id="vl">Voce</label>
+<select id="voice"></select>
+<div id="info"></div>
+<div class="bar" id="bar"><i id="bari"></i></div>
+<div class="row">
+  <button id="dl">⬇ Scarica voce</button>
+  <button id="rm">🗑 Rimuovi</button>
+</div>
+
+<label>Velocità: <span id="spv">1.0</span>×</label>
+<input type="range" id="sp" min="0.7" max="1.4" step="0.05" value="1">
+
+<label>Testo da leggere</label>
+<textarea id="txt">Ciao! Questa è una prova della voce. Il libro costava 20 euro, ma l'ho trovato al 50% di sconto. «Che bella giornata», disse Marco, «andiamo a fare una passeggiata?» La città dormiva ancora, e nelle strade vuote si sentiva soltanto il vento che muoveva le foglie.</textarea>
+
+<button id="play" class="acc">▶ Leggi</button>
+<div id="sent"></div>
+<div id="log"></div>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  function $(i) { return document.getElementById(i); }
+  var voices = [], busy = false, stopFlag = false, ac = null, sources = [];
+
+  function log(m) { var l = $('log'); l.textContent += m + '\n'; l.scrollTop = l.scrollHeight; }
+  function mb(n) { return n ? Math.round(n / 1e5) / 10 + ' MB' : '? MB'; }
+  function cur() { return voices[parseInt($('voice').value, 10)]; }
+
+  function refresh() {
+    var v = cur(); if (!v) return;
+    PiperEngine.isDownloaded(v).then(function (d) {
+      $('info').textContent = d ? 'Scaricata ✓ (funziona anche offline)' : 'Da scaricare: ' + mb(v.size) + '. Usa il Wi-Fi.';
+      $('dl').style.display = d ? 'none' : 'block';
+      $('rm').style.display = d ? 'block' : 'none';
+    });
+  }
+
+  PiperEngine.listVoices().then(function (vs) {
+    voices = vs;
+    var sel = $('voice');
+    vs.forEach(function (v, i) {
+      var o = document.createElement('option'); o.value = i; o.textContent = v.label + ' · ' + mb(v.size);
+      sel.appendChild(o);
+    });
+    var i0 = 0; vs.forEach(function (v, i) { if (/paola/.test(v.key)) i0 = i; });
+    sel.value = i0; refresh();
+    log('Voci italiane trovate: ' + vs.map(function (v) { return v.key; }).join(', '));
+  }).catch(function (e) { log('ERRORE elenco voci: ' + e.message); });
+
+  $('voice').onchange = refresh;
+  $('sp').oninput = function () { $('spv').textContent = parseFloat(this.value).toFixed(2); };
+
+  function progress(loaded, total, phase) {
+    var b = $('bar'); b.style.display = 'block';
+    if (phase === 'init') { $('info').textContent = 'Preparo la voce…'; $('bari').style.width = '100%'; return; }
+    var p = total ? Math.min(100, Math.round(100 * loaded / total)) : 0;
+    $('bari').style.width = p + '%';
+    $('info').textContent = 'Scarico… ' + (total ? p + '% (' + mb(loaded) + ' di ' + mb(total) + ')' : mb(loaded));
+  }
+
+  $('dl').onclick = function () {
+    var v = cur(); if (busy) return; busy = true;
+    var t0 = Date.now();
+    PiperEngine.loadVoice(v, progress).then(function () {
+      log('Voce pronta in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
+    }).catch(function (e) { log('ERRORE download: ' + e.message); })
+      .then(function () { busy = false; $('bar').style.display = 'none'; refresh(); });
+  };
+  $('rm').onclick = function () { PiperEngine.removeVoice(cur()).then(refresh); };
+
+  function splitSentences(text) {
+    var out = [];
+    text.split(/\n+/).forEach(function (p) {
+      var parts = p.trim().match(/[\s\S]+?(?:[.!?…]+["'»”’)\]]*(?=\s|$)|$)/g) || [];
+      parts.forEach(function (s) { s = s.trim(); if (s) out.push(s); });
+    });
+    return out;
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function stopAll() {
+    stopFlag = true;
+    sources.forEach(function (s) { try { s.stop(); } catch (e) {} });
+    sources = [];
+  }
+
+  $('play').onclick = function () {
+    if (busy) { stopAll(); return; }
+    var v = cur(); if (!v) return;
+    var sents = splitSentences($('txt').value);
+    if (!sents.length) return;
+    busy = true; stopFlag = false; $('play').textContent = '⏹ Stop';
+    var box = $('sent'); box.innerHTML = '';
+    var spans = sents.map(function (s) { var e = document.createElement('span'); e.textContent = s + ' '; box.appendChild(e); return e; });
+    var speed = parseFloat($('sp').value);
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();   // deve partire da un tocco dell'utente
+    var timeline = [];
+    var hl = setInterval(function () {
+      var t = ac.currentTime, k = -1;
+      for (var i = 0; i < timeline.length; i++) if (timeline[i].start <= t && t < timeline[i].end) k = timeline[i].i;
+      spans.forEach(function (s, i) { s.classList.toggle('cur', i === k); });
+    }, 120);
+
+    var state, nextTime = 0, tot = { gen: 0, aud: 0 };
+    PiperEngine.loadVoice(v, progress).then(function (st) {
+      state = st; $('bar').style.display = 'none'; refresh();
+      var t0 = Date.now();
+      return PiperEngine.phonemize(sents, st.cfg.espeak && st.cfg.espeak.voice ? st.cfg.espeak.voice : 'it').then(function (ids) {
+        log('Fonemi pronti in ' + (Date.now() - t0) + ' ms');
+        return ids;
+      });
+    }).then(function (allIds) {
+      nextTime = ac.currentTime + 0.1;
+      var chain = Promise.resolve();
+      sents.forEach(function (s, i) {
+        chain = chain.then(function () {
+          if (stopFlag || !allIds[i] || !allIds[i].length) return;
+          // non preparo troppo in anticipo: al massimo 10 secondi di audio in coda
+          function wait() { return (nextTime - ac.currentTime > 10 && !stopFlag) ? sleep(200).then(wait) : null; }
+          return Promise.resolve(wait()).then(function () {
+            var t0 = performance.now();
+            return PiperEngine.run(state, allIds[i], speed).then(function (r) {
+              var gen = (performance.now() - t0) / 1000, dur = r.pcm.length / r.rate;
+              tot.gen += gen; tot.aud += dur;
+              log('Frase ' + (i + 1) + ': ' + gen.toFixed(2) + ' s per ' + dur.toFixed(2) + ' s di audio (×' + (dur / gen).toFixed(1) + ')');
+              if (stopFlag) return;
+              var buf = ac.createBuffer(1, r.pcm.length, r.rate);
+              buf.getChannelData(0).set(r.pcm);
+              var src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination);
+              var start = Math.max(nextTime, ac.currentTime + 0.02);
+              src.start(start); sources.push(src);
+              nextTime = start + dur + 0.12;   // piccola pausa tra le frasi
+              timeline.push({ i: i, start: start, end: start + dur + 0.12 });
+            });
+          });
+        });
+      });
+      return chain;
+    }).then(function () {
+      if (stopFlag) return;
+      log('Generazione finita. Totale: ' + tot.gen.toFixed(1) + ' s per ' + tot.aud.toFixed(1) + ' s di audio (×' + (tot.aud / Math.max(tot.gen, 0.01)).toFixed(1) + ')');
+      return sleep(Math.max(0, (nextTime - ac.currentTime) * 1000));
+    }).catch(function (e) { log('ERRORE: ' + (e && e.message ? e.message : e)); })
+      .then(function () {
+        clearInterval(hl); busy = false; $('play').textContent = '▶ Leggi';
+        spans.forEach(function (s) { s.classList.remove('cur'); });
+      });
+  };
+})();
+</script>
+</body>
+</html>
