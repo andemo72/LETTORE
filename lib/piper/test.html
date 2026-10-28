@@ -40,12 +40,19 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   <button id="rm">🗑 Rimuovi</button>
 </div>
 
-<label>Velocità: <span id="spv">1.0</span>×</label>
+<label>Riproduzione</label>
+<select id="mode">
+  <option value="el">B · Come un lettore musicale (prova con schermo bloccato)</option>
+  <option value="wa">A · Standard (la precedente)</option>
+</select>
+
+<label>Velocità: <span id="spv">1.00</span>×</label>
 <input type="range" id="sp" min="0.7" max="1.4" step="0.05" value="1">
 
 <label>Testo da leggere</label>
-<textarea id="txt">Ciao! Questa è una prova della voce. Il libro costava 20 euro, ma l'ho trovato al 50% di sconto. «Che bella giornata», disse Marco, «andiamo a fare una passeggiata?» La città dormiva ancora, e nelle strade vuote si sentiva soltanto il vento che muoveva le foglie.</textarea>
+<textarea id="txt">Ciao! Questa è una prova della voce. Il libro costava 20 euro, ma l'ho trovato al 50% di sconto. «Che bella giornata», disse Marco, «andiamo a fare una passeggiata?» La città dormiva ancora, e nelle strade vuote si sentiva soltanto il vento che muoveva le foglie. Dopo qualche minuto, il sole cominciò a salire dietro le colline, e la luce dorata scivolò lentamente sui tetti, sulle finestre e sui campanili. Marco respirò a fondo, chiuse gli occhi e sorrise.</textarea>
 
+<audio id="au" playsinline preload="auto"></audio>
 <button id="play" class="acc">▶ Leggi</button>
 <div id="sent"></div>
 <div id="log"></div>
@@ -55,11 +62,12 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 (function () {
   'use strict';
   function $(i) { return document.getElementById(i); }
-  var voices = [], busy = false, stopFlag = false, ac = null, sources = [];
+  var voices = [], busy = false, stopFlag = false, sink = null;
 
   function log(m) { var l = $('log'); l.textContent += m + '\n'; l.scrollTop = l.scrollHeight; }
   function mb(n) { return n ? Math.round(n / 1e5) / 10 + ' MB' : '? MB'; }
   function cur() { return voices[parseInt($('voice').value, 10)]; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   function refresh() {
     var v = cur(); if (!v) return;
@@ -111,13 +119,95 @@ input[type=range]{width:100%;accent-color:var(--acc)}
     });
     return out;
   }
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  function stopAll() {
-    stopFlag = true;
-    sources.forEach(function (s) { try { s.stop(); } catch (e) {} });
-    sources = [];
+  // ---------- A) riproduzione standard (Web Audio) ----------
+  function WebAudioSink(onIndex) {
+    var ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();   // deve partire da un tocco dell'utente
+    var nextTime = 0, sources = [], timeline = [], last = -1;
+    var timer = setInterval(function () {
+      var t = ac.currentTime, k = -1;
+      for (var i = 0; i < timeline.length; i++) if (timeline[i].start <= t && t < timeline[i].end) k = timeline[i].i;
+      if (k !== last) { last = k; onIndex(k); }
+    }, 120);
+    return {
+      limit: 10,
+      add: function (pcm, rate, i) {
+        var buf = ac.createBuffer(1, pcm.length, rate);
+        buf.getChannelData(0).set(pcm);
+        var src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination);
+        var start = Math.max(nextTime, ac.currentTime + 0.1), dur = pcm.length / rate;
+        src.start(start); sources.push(src);
+        nextTime = start + dur + 0.12;
+        timeline.push({ i: i, start: start, end: start + dur + 0.12 });
+      },
+      ahead: function () { return Math.max(0, nextTime - ac.currentTime); },
+      stop: function () { sources.forEach(function (s) { try { s.stop(); } catch (e) {} }); sources = []; clearInterval(timer); onIndex(-1); try { ac.close(); } catch (e) {} }
+    };
   }
+
+  // ---------- B) come un lettore musicale (elemento <audio> + comandi di blocco schermo) ----------
+  function wav(pcm, rate, padSec) {
+    var pad = Math.round(rate * padSec), n = pcm.length + pad;
+    var dv = new DataView(new ArrayBuffer(44 + n * 2)), o = 0;
+    function s(t) { for (var i = 0; i < t.length; i++) dv.setUint8(o++, t.charCodeAt(i)); }
+    s('RIFF'); dv.setUint32(o, 36 + n * 2, true); o += 4; s('WAVEfmt '); dv.setUint32(o, 16, true); o += 4;
+    dv.setUint16(o, 1, true); o += 2; dv.setUint16(o, 1, true); o += 2; dv.setUint32(o, rate, true); o += 4;
+    dv.setUint32(o, rate * 2, true); o += 4; dv.setUint16(o, 2, true); o += 2; dv.setUint16(o, 16, true); o += 2;
+    s('data'); dv.setUint32(o, n * 2, true); o += 4;
+    for (var i = 0; i < pcm.length; i++) {
+      var x = Math.max(-1, Math.min(1, pcm[i]));
+      dv.setInt16(o, x < 0 ? x * 32768 : x * 32767, true); o += 2;
+    }
+    return new Blob([dv.buffer], { type: 'audio/wav' });
+  }
+  function ElementSink(onIndex, title) {
+    var au = $('au'), q = [], curItem = null, buffered = 0, stopped = false;
+    // "sblocco": un suono muto partito dal tocco dell'utente, così iOS permette di continuare da solo
+    au.src = URL.createObjectURL(wav(new Float32Array(2205), 22050, 0));
+    var p = au.play(); if (p && p.catch) p.catch(function (e) { if (e.name !== 'AbortError') log('Avviso audio: ' + e.message); });
+    function next() {
+      if (stopped) return;
+      if (!q.length) { curItem = null; return; }
+      curItem = q.shift();
+      au.src = curItem.url;
+      var pp = au.play(); if (pp && pp.catch) pp.catch(function (e) { if (e.name !== 'AbortError') log('Avviso audio: ' + e.message); });
+      onIndex(curItem.i);
+    }
+    au.onended = function () {
+      if (stopped) return;
+      if (curItem) { URL.revokeObjectURL(curItem.url); buffered -= curItem.dur; }
+      curItem = null; next();
+    };
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: title || 'Lettura', artist: 'Lettore' });
+        navigator.mediaSession.setActionHandler('play', function () { au.play(); });
+        navigator.mediaSession.setActionHandler('pause', function () { au.pause(); });
+        navigator.mediaSession.setActionHandler('stop', function () { stopAll(); });
+      } catch (e) {}
+    }
+    return {
+      limit: 40,   // tengo più audio pronto in anticipo: a schermo bloccato i timer possono rallentare
+      add: function (pcm, rate, i) {
+        var dur = pcm.length / rate + 0.12;
+        q.push({ url: URL.createObjectURL(wav(pcm, rate, 0.12)), dur: dur, i: i });
+        buffered += dur;
+        if (!curItem) next();
+      },
+      ahead: function () { return buffered; },
+      stop: function () {
+        stopped = true; au.pause();
+        q.forEach(function (it) { URL.revokeObjectURL(it.url); }); q = [];
+        if (curItem) URL.revokeObjectURL(curItem.url);
+        onIndex(-1);
+        if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; } catch (e) {} }
+      },
+      idle: function () { return !curItem && !q.length; }
+    };
+  }
+
+  function stopAll() { stopFlag = true; if (sink) { sink.stop(); sink = null; } }
 
   $('play').onclick = function () {
     if (busy) { stopAll(); return; }
@@ -128,16 +218,14 @@ input[type=range]{width:100%;accent-color:var(--acc)}
     var box = $('sent'); box.innerHTML = '';
     var spans = sents.map(function (s) { var e = document.createElement('span'); e.textContent = s + ' '; box.appendChild(e); return e; });
     var speed = parseFloat($('sp').value);
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === 'suspended') ac.resume();   // deve partire da un tocco dell'utente
-    var timeline = [];
-    var hl = setInterval(function () {
-      var t = ac.currentTime, k = -1;
-      for (var i = 0; i < timeline.length; i++) if (timeline[i].start <= t && t < timeline[i].end) k = timeline[i].i;
-      spans.forEach(function (s, i) { s.classList.toggle('cur', i === k); });
-    }, 120);
+    function mark(k) { spans.forEach(function (s, i) { s.classList.toggle('cur', i === k); }); }
 
-    var state, nextTime = 0, tot = { gen: 0, aud: 0 };
+    // il sink va creato qui, subito, dentro il tocco dell'utente
+    var mode = $('mode').value;
+    sink = mode === 'wa' ? WebAudioSink(mark) : ElementSink(mark, v.label);
+    var mySink = sink, state, tot = { gen: 0, aud: 0 };
+    log('--- Riproduzione ' + (mode === 'wa' ? 'A (standard)' : 'B (lettore musicale)') + ' · voce ' + v.key + ' ---');
+
     PiperEngine.loadVoice(v, progress).then(function (st) {
       state = st; $('bar').style.display = 'none'; refresh();
       var t0 = Date.now();
@@ -146,27 +234,19 @@ input[type=range]{width:100%;accent-color:var(--acc)}
         return ids;
       });
     }).then(function (allIds) {
-      nextTime = ac.currentTime + 0.1;
       var chain = Promise.resolve();
       sents.forEach(function (s, i) {
         chain = chain.then(function () {
           if (stopFlag || !allIds[i] || !allIds[i].length) return;
-          // non preparo troppo in anticipo: al massimo 10 secondi di audio in coda
-          function wait() { return (nextTime - ac.currentTime > 10 && !stopFlag) ? sleep(200).then(wait) : null; }
+          function wait() { return (mySink.ahead() > mySink.limit && !stopFlag) ? sleep(250).then(wait) : null; }
           return Promise.resolve(wait()).then(function () {
+            if (stopFlag) return;
             var t0 = performance.now();
             return PiperEngine.run(state, allIds[i], speed).then(function (r) {
               var gen = (performance.now() - t0) / 1000, dur = r.pcm.length / r.rate;
               tot.gen += gen; tot.aud += dur;
               log('Frase ' + (i + 1) + ': ' + gen.toFixed(2) + ' s per ' + dur.toFixed(2) + ' s di audio (×' + (dur / gen).toFixed(1) + ')');
-              if (stopFlag) return;
-              var buf = ac.createBuffer(1, r.pcm.length, r.rate);
-              buf.getChannelData(0).set(r.pcm);
-              var src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination);
-              var start = Math.max(nextTime, ac.currentTime + 0.02);
-              src.start(start); sources.push(src);
-              nextTime = start + dur + 0.12;   // piccola pausa tra le frasi
-              timeline.push({ i: i, start: start, end: start + dur + 0.12 });
+              if (!stopFlag) mySink.add(r.pcm, r.rate, i);
             });
           });
         });
@@ -175,11 +255,18 @@ input[type=range]{width:100%;accent-color:var(--acc)}
     }).then(function () {
       if (stopFlag) return;
       log('Generazione finita. Totale: ' + tot.gen.toFixed(1) + ' s per ' + tot.aud.toFixed(1) + ' s di audio (×' + (tot.aud / Math.max(tot.gen, 0.01)).toFixed(1) + ')');
-      return sleep(Math.max(0, (nextTime - ac.currentTime) * 1000));
+      function drain() {
+        if (stopFlag) return null;
+        if (mySink.idle ? mySink.idle() : mySink.ahead() <= 0.05) return null;
+        return sleep(300).then(drain);
+      }
+      return Promise.resolve(drain());
     }).catch(function (e) { log('ERRORE: ' + (e && e.message ? e.message : e)); })
       .then(function () {
-        clearInterval(hl); busy = false; $('play').textContent = '▶ Leggi';
-        spans.forEach(function (s) { s.classList.remove('cur'); });
+        busy = false; $('play').textContent = '▶ Leggi';
+        if (sink === mySink) { mySink.stop(); sink = null; }
+        mark(-1);
+        log('Lettura terminata.');
       });
   };
 })();
