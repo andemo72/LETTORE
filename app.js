@@ -312,6 +312,7 @@
       showView('v-read');
       updatePlayBtn();
       show(cur, true);
+      if (voice && voice.piper && piperDone[voice.def.key]) piperEnsure(voice.def).catch(function () {});
     });
   }
 
@@ -455,6 +456,8 @@
 
   function speak(i) {
     if (i < 0 || i >= sents.length) { pause(); return; }
+    if (voice && voice.piper) { piperSpeak(i); return; }
+    piperStop();
     playing = true;
     updatePlayBtn();
     show(i);
@@ -468,6 +471,7 @@
   function pause() {
     playing = false; gen++;
     window.speechSynthesis.cancel();
+    piperStop();
     updatePlayBtn();
     releaseWake();
   }
@@ -578,6 +582,177 @@
     };
   })();
 
+  // ---------- Voci neurali Piper (naturali, gratuite, funzionano offline) ----------
+  var piperDefs = [], piperDone = {}, pState = null, pKey = '', pLoading = {}, pAudio = null, pSink = null;
+  var toastT = null;
+
+  function toast(msg, ms) {
+    var t = $('toast');
+    if (!t) {
+      t = document.createElement('div'); t.id = 'toast';
+      t.style.cssText = 'position:fixed;left:16px;right:16px;bottom:calc(170px + env(safe-area-inset-bottom));z-index:40;' +
+        'background:var(--card);color:var(--txt);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;' +
+        'text-align:center;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.3);display:none';
+      document.body.appendChild(t);
+    }
+    clearTimeout(toastT);
+    t.textContent = msg || '';
+    t.style.display = msg ? 'block' : 'none';
+    if (msg && ms) toastT = setTimeout(function () { t.style.display = 'none'; }, ms);
+  }
+  function mbText(n) { return n ? Math.round(n / 1e6) + ' MB' : ''; }
+  function sleepMs(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // audio grezzo -> file WAV (con una piccola pausa di silenzio in coda)
+  function wavBlob(pcm, rate, padSec) {
+    var pad = Math.round(rate * padSec), n = pcm.length + pad;
+    var dv = new DataView(new ArrayBuffer(44 + n * 2)), o = 0;
+    function w(t) { for (var i = 0; i < t.length; i++) dv.setUint8(o++, t.charCodeAt(i)); }
+    w('RIFF'); dv.setUint32(o, 36 + n * 2, true); o += 4; w('WAVEfmt '); dv.setUint32(o, 16, true); o += 4;
+    dv.setUint16(o, 1, true); o += 2; dv.setUint16(o, 1, true); o += 2; dv.setUint32(o, rate, true); o += 4;
+    dv.setUint32(o, rate * 2, true); o += 4; dv.setUint16(o, 2, true); o += 2; dv.setUint16(o, 16, true); o += 2;
+    w('data'); dv.setUint32(o, n * 2, true); o += 4;
+    for (var i = 0; i < pcm.length; i++) {
+      var x = Math.max(-1, Math.min(1, pcm[i]));
+      dv.setInt16(o, x < 0 ? x * 32768 : x * 32767, true); o += 2;
+    }
+    return new Blob([dv.buffer], { type: 'audio/wav' });
+  }
+
+  function piperInit() {
+    if (!window.PiperEngine) return;
+    PiperEngine.listVoices().then(function (defs) {
+      piperDefs = defs;
+      return Promise.all(defs.map(function (d) {
+        return PiperEngine.isDownloaded(d).then(function (x) { piperDone[d.key] = x; });
+      }));
+    }).then(function () { buildVoiceList(); }).catch(function () {});
+  }
+
+  // scarica (se serve) e prepara la voce in memoria: la prima volta richiede qualche secondo
+  function piperEnsure(def) {
+    if (pState && pKey === def.key) return Promise.resolve(pState);
+    if (pLoading[def.key]) return pLoading[def.key];
+    toast('Preparo la voce… (qualche secondo la prima volta)');
+    var p = PiperEngine.loadVoice(def, function (l, t, ph) {
+      if (ph === 'init') toast('Preparo la voce…');
+      else if (t) toast('Scarico la voce… ' + Math.min(100, Math.round(100 * l / t)) + '%');
+    }).then(function (st) {
+      pState = st; pKey = def.key; piperDone[def.key] = true;
+      var esp = (st.cfg.espeak && st.cfg.espeak.voice) || 'it';
+      // un primo giro "a vuoto": la prima frase vera parte poi molto più in fretta
+      return PiperEngine.phonemize(['Prova.'], esp).then(function (ids) {
+        return ids[0] && ids[0].length ? PiperEngine.run(st, ids[0], 1) : 0;
+      }).catch(function () {}).then(function () { toast(''); return st; });
+    });
+    pLoading[def.key] = p;
+    p.then(function () { delete pLoading[def.key]; }, function () { delete pLoading[def.key]; toast(''); });
+    return p;
+  }
+
+  // riproduttore: un elemento <audio> (come un lettore musicale) che continua anche a schermo bloccato
+  function makeSink(g) {
+    if (!pAudio) {
+      pAudio = document.createElement('audio');
+      pAudio.setAttribute('playsinline', ''); pAudio.preload = 'auto';
+      document.body.appendChild(pAudio);
+    }
+    var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false;
+    // suono muto partito dal tocco dell'utente: iOS permette poi di continuare da solo
+    au.src = URL.createObjectURL(wavBlob(new Float32Array(2205), 22050, 0));
+    var p0 = au.play(); if (p0 && p0.catch) p0.catch(function () {});
+    function next() {
+      if (stopped) return;
+      if (!q.length) { curItem = null; if (done && g === gen) pause(); return; }
+      curItem = q.shift();
+      au.src = curItem.url;
+      var pp = au.play();
+      if (pp && pp.catch) pp.catch(function (e) { if (e.name !== 'AbortError') toast('Audio bloccato: tocca Leggi di nuovo', 4000); });
+      if (g === gen) show(curItem.i);
+    }
+    au.onended = function () {
+      if (stopped) return;
+      if (curItem) { URL.revokeObjectURL(curItem.url); buffered -= curItem.dur; curItem = null; }
+      next();
+    };
+    return {
+      add: function (pcm, rate, i) {
+        var pad = (sents[i + 1] && sents[i + 1].br && cfg.pauseMs > 0) ? 0.12 + cfg.pauseMs / 1000 : 0.12;
+        var dur = pcm.length / rate + pad;
+        q.push({ url: URL.createObjectURL(wavBlob(pcm, rate, pad)), dur: dur, i: i });
+        buffered += dur;
+        if (!curItem) next();
+      },
+      ahead: function () { return buffered; },
+      finish: function () { done = true; if (!curItem && !q.length && g === gen) pause(); },
+      stop: function () {
+        stopped = true; au.onended = null; au.pause();
+        q.forEach(function (it) { URL.revokeObjectURL(it.url); }); q = [];
+        if (curItem) { URL.revokeObjectURL(curItem.url); curItem = null; }
+      }
+    };
+  }
+
+  function piperStop() { if (pSink) { pSink.stop(); pSink = null; } }
+
+  // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
+  function piperLoop(st, sink, g, start) {
+    var esp = (st.cfg.espeak && st.cfg.espeak.voice) || 'it';
+    function room() { return (g === gen && sink.ahead() > 30) ? sleepMs(250).then(room) : null; }
+    function batch(k, size) {
+      if (g !== gen) return null;
+      var idxs = [], texts = [];
+      for (var j = k; j < sents.length && idxs.length < size; j++) {
+        var t = spokenText(j);
+        if (t) { idxs.push(j); texts.push(t); }
+      }
+      if (!idxs.length) { sink.finish(); return null; }
+      return PiperEngine.phonemize(texts, esp).then(function (all) {
+        var chain = Promise.resolve();
+        idxs.forEach(function (si, n) {
+          chain = chain.then(function () {
+            if (g !== gen || !all[n] || !all[n].length) return;
+            return Promise.resolve(room()).then(function () {
+              if (g !== gen) return;
+              return PiperEngine.run(st, all[n], cfg.rate).then(function (r) { if (g === gen) sink.add(r.pcm, r.rate, si); });
+            });
+          });
+        });
+        return chain.then(function () { return batch(idxs[idxs.length - 1] + 1, 6); });
+      });
+    }
+    return Promise.resolve(batch(start, 1));   // la prima volta una frase sola, per partire subito
+  }
+
+  function piperSpeak(i) {
+    playing = true;
+    updatePlayBtn();
+    show(i);
+    var g = ++gen;
+    window.speechSynthesis.cancel();
+    piperStop();
+    var sink = makeSink(g);          // va creato subito, dentro il tocco dell'utente
+    pSink = sink;
+    requestWake();
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'Lettore' }); } catch (e) {}
+    }
+    piperEnsure(voice.def).then(function (st) { return piperLoop(st, sink, g, i); })
+      .catch(function (e) {
+        if (g === gen) { pause(); toast('Voce non disponibile: ' + (e && e.message ? e.message : e), 6000); }
+      });
+  }
+
+  // comandi sulla schermata di blocco dell'iPhone
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler('play', function () { if (!playing) speak(cur); });
+      navigator.mediaSession.setActionHandler('pause', function () { pause(); });
+      navigator.mediaSession.setActionHandler('nexttrack', function () { $('next').onclick(); });
+      navigator.mediaSession.setActionHandler('previoustrack', function () { $('prev').onclick(); });
+    } catch (e) {}
+  }
+
   // ---------- Voci e impostazioni ----------
   function langName(code) {
     try {
@@ -586,13 +761,31 @@
     } catch (e) {}
     return code;
   }
-  var lastCount = -1;
+  var sysAll = [], lastCount = -1;
   function loadVoices() {
     var all = window.speechSynthesis.getVoices();
     if (!all.length || all.length === lastCount) return;
-    lastCount = all.length;
+    lastCount = all.length; sysAll = all;
+    buildVoiceList();
+  }
+  function buildVoiceList() {
+    var sel = $('voice');
+    sel.innerHTML = '';
+    voices = [];
+    if (piperDefs.length) {
+      var pg = document.createElement('optgroup');
+      pg.label = 'Voci neurali · naturali e offline';
+      piperDefs.forEach(function (d) {
+        var o = document.createElement('option');
+        o.value = voices.length;
+        o.textContent = d.label + (piperDone[d.key] ? ' ✓' : ' · da scaricare ' + mbText(d.size));
+        pg.appendChild(o);
+        voices.push({ piper: true, def: d, name: d.label, lang: 'it-IT', voiceURI: 'piper:' + d.key });
+      });
+      sel.appendChild(pg);
+    }
     var seen = {}, groups = {};
-    all.forEach(function (v) {
+    sysAll.forEach(function (v) {
       if (seen[v.voiceURI]) return;
       seen[v.voiceURI] = 1;
       var lg = (v.lang || 'und').replace('_', '-');
@@ -604,9 +797,6 @@
       if (ai !== bi) return ai - bi;
       return langName(a).localeCompare(langName(b), 'it');
     });
-    var sel = $('voice');
-    sel.innerHTML = '';
-    voices = [];
     langs.forEach(function (lg) {
       var og = document.createElement('optgroup');
       og.label = langName(lg) + ' · ' + lg;
@@ -618,16 +808,20 @@
       });
       sel.appendChild(og);
     });
+    if (!voices.length) return;
     var idx = -1;
     for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === cfg.voiceURI) idx = i;
     if (idx < 0) {
-      idx = 0; // la prima è nel gruppo italiano
+      // predefinita: la prima voce del telefono in italiano (meglio se Migliorata/Premium)
+      for (var f = 0; f < voices.length; f++) if (!voices[f].piper) { idx = f; break; }
+      if (idx < 0) idx = 0;
       for (var q = 0; q < voices.length; q++) {
-        if (voices[q].lang.toLowerCase().indexOf('it') === 0 && /premium|enhanced|migliorat/i.test(voices[q].name)) { idx = q; break; }
+        if (!voices[q].piper && voices[q].lang.toLowerCase().indexOf('it') === 0 && /premium|enhanced|migliorat/i.test(voices[q].name)) { idx = q; break; }
       }
     }
     sel.value = idx; voice = voices[idx];
-    $('vlabel').textContent = 'Voce (' + voices.length + ' sul telefono)';
+    var nSys = voices.filter(function (v) { return !v.piper; }).length;
+    $('vlabel').textContent = 'Voce (' + nSys + ' sul telefono' + (piperDefs.length ? ' + ' + piperDefs.length + ' neurali' : '') + ')';
   }
   if ('speechSynthesis' in window) {
     loadVoices();
@@ -645,6 +839,7 @@
   };
   $('demo').onclick = function () {
     pause();
+    if (voice && voice.piper) { speak(cur); return; }
     var u = new SpeechSynthesisUtterance((spokenText(cur) || 'Prova della voce').substring(0, 200));
     if (voice) { u.voice = voice; u.lang = voice.lang; }
     u.rate = cfg.rate; u.pitch = cfg.pitch;
@@ -652,10 +847,32 @@
     window.speechSynthesis.speak(u);
   };
 
-  $('voice').onchange = function () {
-    voice = voices[parseInt(this.value, 10)];
-    cfg.voiceURI = voice.voiceURI; saveCfg();
+  function selectVoice(v) {
+    voice = v; cfg.voiceURI = v.voiceURI; saveCfg();
+    $('voice').value = voices.indexOf(v);
+    if (v.piper) piperEnsure(v.def).catch(function () {});   // la preparo subito: all'avvio della lettura sarà già pronta
     if (playing) speak(cur);
+  }
+  $('voice').onchange = function () {
+    var v = voices[parseInt(this.value, 10)], sel = this;
+    if (!v) return;
+    if (v.piper && !piperDone[v.def.key]) {
+      if (!confirm('Scaricare la voce "' + v.def.label + '"?\n\nCirca ' + mbText(v.def.size) +
+          ': meglio con il Wi-Fi. Si scarica una volta sola, poi funziona anche senza internet.')) {
+        sel.value = voices.indexOf(voice); return;
+      }
+      pause();
+      piperEnsure(v.def).then(function () {
+        buildVoiceList();
+        for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === v.voiceURI) { selectVoice(voices[i]); break; }
+        toast('Voce pronta ✓', 2500);
+      }).catch(function (e) {
+        toast('Download non riuscito: ' + (e && e.message ? e.message : e), 6000);
+        sel.value = voices.indexOf(voice);
+      });
+      return;
+    }
+    selectVoice(v);
   };
   $('rate').step = '0.01'; $('pitch').step = '0.01';   // passo fine: gli stili di voce usano valori come 0.92
   $('rate').value = cfg.rate; $('rv').textContent = cfg.rate + '×';
@@ -694,6 +911,7 @@
 
   // ---------- Avvio ----------
   updatePlayBtn();
+  piperInit();
   openDB().then(function () {
     renderList();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
