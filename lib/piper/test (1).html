@@ -231,7 +231,8 @@ input[type=range]{width:100%;accent-color:var(--acc)}
       state = st; $('bar').style.display = 'none'; refresh();
       var t0 = Date.now();
       return PiperEngine.phonemize(sents, st.cfg.espeak && st.cfg.espeak.voice ? st.cfg.espeak.voice : 'it').then(function (ids) {
-        log('Fonemi pronti in ' + (Date.now() - t0) + ' ms');
+        var okN = ids.filter(function (a) { return a && a.length; }).length;
+        log('Fonemi pronti in ' + (Date.now() - t0) + ' ms (' + okN + ' frasi su ' + ids.length + ')');
         return ids;
       });
     }).then(function (allIds) {
