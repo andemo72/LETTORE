@@ -286,7 +286,7 @@
 
   // ---------- Lettore ----------
   var book = null, sents = [], cur = 0, playing = false, gen = 0;
-  var pageStart = -1, spans = [];
+  var pageStart = -1, spans = [], curEl = null;
   var voices = [], voice = null;
   var marks = [], mkind = 'sez';
   var sleepTimer = null, wake = null;
@@ -309,6 +309,7 @@
       $('rtitle').textContent = book.title;
       $('pos').max = Math.max(0, sents.length - 1);
       pageStart = -1;
+      try { localStorage.setItem('lettore-open', String(id)); } catch (e) {}
       showView('v-read');
       updatePlayBtn();
       show(cur, true);
@@ -316,28 +317,52 @@
     });
   }
 
-  function renderPage(start) {
-    pageStart = start;
-    var box = $('text');
-    box.innerHTML = '';
-    spans = [];
-    var p = null;
-    var end = Math.min(sents.length, start + PAGE);
-    for (var i = start; i < end; i++) {
+  var pageEnd = 0, lastRender = 0;
+  function buildSpans(from, to, into, joinLast) {
+    var p = joinLast ? into.lastChild : null, arr = [];
+    for (var i = from; i < to; i++) {
       if (!p || sents[i].br) {
         p = document.createElement('p');
         p.style.margin = '0 0 1em';
-        box.appendChild(p);
+        into.appendChild(p);
       }
       var sp = document.createElement('span');
       sp.className = 's';
       sp.setAttribute('data-i', i);
       sp.textContent = sents[i].t + ' ';
       p.appendChild(sp);
-      spans.push(sp);
+      arr.push(sp);
     }
-    box.scrollTop = 0;
+    return arr;
   }
+  function renderPage(start) {
+    pageStart = start;
+    pageEnd = Math.min(sents.length, start + PAGE);
+    var box = $('text');
+    box.innerHTML = '';
+    spans = buildSpans(start, pageEnd, box, false);
+    box.scrollTop = 0;
+    lastRender = Date.now();
+  }
+  // scorrendo, il testo si allunga da solo in alto e in basso: si può girare tutto il documento
+  $('text').addEventListener('scroll', function () {
+    if (!sents.length || Date.now() - lastRender < 500) return;
+    var box = this;
+    if (pageEnd < sents.length && box.scrollTop + box.clientHeight > box.scrollHeight - 900) {
+      var to = Math.min(sents.length, pageEnd + PAGE);
+      var add = buildSpans(pageEnd, to, box, !sents[pageEnd].br);
+      spans = spans.concat(add); pageEnd = to;
+    } else if (pageStart > 0 && box.scrollTop < 700) {
+      var from = Math.max(0, pageStart - PAGE), h0 = box.scrollHeight, t0 = box.scrollTop;
+      var tmp = document.createElement('div');
+      var add2 = buildSpans(from, pageStart, tmp, false);
+      var fr = document.createDocumentFragment();
+      while (tmp.firstChild) fr.appendChild(tmp.firstChild);
+      box.insertBefore(fr, box.firstChild);
+      spans = add2.concat(spans); pageStart = from;
+      box.scrollTop = t0 + (box.scrollHeight - h0);
+    }
+  });
 
   function markAt(i) {
     var lo = 0, hi = marks.length - 1, r = -1;
@@ -350,10 +375,10 @@
 
   function show(i, instant) {
     cur = i;
-    var start = Math.floor(i / PAGE) * PAGE;
-    if (start !== pageStart) renderPage(start);
-    for (var k = 0; k < spans.length; k++) spans[k].classList.remove('cur');
+    if (pageStart < 0 || i < pageStart || i >= pageEnd) { renderPage(Math.floor(i / PAGE) * PAGE); instant = true; }
+    if (curEl) curEl.classList.remove('cur');
     var el = spans[i - pageStart];
+    curEl = el || null;
     if (el) {
       el.classList.add('cur');
       el.scrollIntoView({ block: 'center', behavior: instant ? 'auto' : 'smooth' });
@@ -486,7 +511,7 @@
   $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) speak(n); else show(n); };
   $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) speak(n); else show(n); };
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
-  $('back').onclick = function () { pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); };
+  $('back').onclick = function () { try { localStorage.removeItem('lettore-open'); } catch (e) {} pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); };
 
   // ---------- Pannelli che salgono dal basso ----------
   function closeSheets() {
@@ -950,6 +975,7 @@
   piperInit();
   openDB().then(function () {
     renderList();
+    try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
   if ('serviceWorker' in navigator) {
