@@ -770,7 +770,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = (evlog.length ? 'Eventi: ' + evlog.join(' | ') + '\n' : '') + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v10): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -793,7 +793,16 @@
             return Promise.resolve(room()).then(function () {
               if (g !== gen) return;
               var t0 = performance.now();
+              function peakOf(pcm) { var m = 0, step = Math.max(1, pcm.length >> 12); for (var q = 0; q < pcm.length; q += step) { var v = Math.abs(pcm[q]); if (v > m || v !== v) m = v !== v ? 99 : v; } return m; }
               return PiperEngine.run(st, all[n], cfg.rate).then(function (r) {
+                var pk = peakOf(r.pcm);
+                if ((pk < 0.01 || pk > 50) && r.pcm.length > 3000) {   // frase muta o rovinata: nuovo calcolo con un motore nuovo
+                  logEv('frase ' + si + ' muta (picco ' + pk.toFixed(3) + '): rifaccio');
+                  PiperEngine.forceRecycle();
+                  return PiperEngine.run(st, all[n], cfg.rate);
+                }
+                return r;
+              }).then(function (r) {
                 if (g !== gen) return;
                 diag.gen += (performance.now() - t0) / 1000; diag.aud += r.pcm.length / r.rate; showDiag();
                 sink.add(r.pcm, r.rate, si);
