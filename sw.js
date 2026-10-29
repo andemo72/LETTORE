@@ -1,6 +1,6 @@
 // Service worker: salva i file dell'app nel telefono per farla funzionare offline.
 // Strategia: prima prova la rete (così gli aggiornamenti arrivano da soli), se è offline usa la copia salvata.
-var CACHE = 'lettore-v9';
+var CACHE = 'lettore-v10';
 var FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png',

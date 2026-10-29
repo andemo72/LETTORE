@@ -677,6 +677,13 @@
   }
 
   // riproduttore: un elemento <audio> (come un lettore musicale) che continua anche a schermo bloccato
+  var evlog = [];
+  function logEv(t) {
+    var d = new Date();
+    evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
+    if (evlog.length > 8) evlog.shift();
+    try { showDiag(); } catch (e) {}
+  }
   function makeSink(g) {
     if (!pAudio) {
       pAudio = document.createElement('audio');
@@ -684,6 +691,22 @@
       document.body.appendChild(pAudio);
     }
     var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false;
+    var lastT = Date.now();
+    ['pause', 'error', 'stalled', 'waiting', 'emptied', 'suspend'].forEach(function (n) {
+      au['on' + n] = function () { if (!stopped && g === gen) logEv('audio: ' + n + (n === 'error' && au.error ? ' ' + au.error.code : '')); };
+    });
+    au.ontimeupdate = function () { lastT = Date.now(); };
+    // guardiano: se l'iPhone ferma l'audio senza avvisare, lo fa ripartire
+    var wd = setInterval(function () {
+      if (stopped) { clearInterval(wd); return; }
+      if (g !== gen) return;
+      if (curItem && au.paused && !au.ended) { logEv('riprendo audio'); var r = au.play(); if (r && r.catch) r.catch(function () {}); }
+      if (!curItem && q.length && !waiting) { logEv('coda ferma: riparto'); next(); }
+      if (curItem && Date.now() - lastT > 12000) {
+        var i = curItem.i; lastT = Date.now(); logEv('audio fermo: ripartenza dalla frase ' + i);
+        setTimeout(function () { if (g === gen && playing) speak(i); }, 0);
+      }
+    }, 2000);
     // suono muto partito dal tocco dell'utente: iOS permette poi di continuare da solo
     au.src = URL.createObjectURL(wavBlob(new Float32Array(2205), 22050, 0));
     var p0 = au.play(); if (p0 && p0.catch) p0.catch(function () {});
@@ -703,7 +726,7 @@
         if (!done) { underruns++; waiting = true; toast('Accumulo un po’ di audio per una lettura più fluida…'); }
         return;
       }
-      curItem = q.shift();
+      curItem = q.shift(); lastT = Date.now();
       au.src = curItem.url;
       var pp = au.play();
       if (pp && pp.catch) pp.catch(function (e) { if (e.name !== 'AbortError') toast('Audio bloccato: tocca Leggi di nuovo', 4000); });
@@ -728,7 +751,7 @@
         if (!curItem && !q.length) { if (g === gen) pause(); } else maybeStart();
       },
       stop: function () {
-        stopped = true; au.onended = null; au.pause();
+        stopped = true; clearInterval(wd); au.onended = null; au.pause();
         if (waiting) toast('');
         q.forEach(function (it) { URL.revokeObjectURL(it.url); }); q = [];
         if (curItem) { URL.revokeObjectURL(curItem.url); curItem = null; }
@@ -744,10 +767,10 @@
     var d = $('diag');
     if (!d) {
       d = document.createElement('div'); d.id = 'diag';
-      d.style.cssText = 'margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
+      d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '';
+    d.textContent = (evlog.length ? 'Eventi: ' + evlog.join(' | ') + '\n' : '') + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
