@@ -313,7 +313,7 @@
       showView('v-read');
       updatePlayBtn();
       show(cur, true);
-      if (voice && voice.piper && piperDone[voice.def.key]) piperEnsure(voice.def).catch(function () {});
+      if (!crashed && voice && voice.piper && piperDone[voice.def.key]) piperEnsure(voice.def).catch(function () {});
     });
   }
 
@@ -660,17 +660,17 @@
   function piperEnsure(def) {
     if (pState && pKey === def.key) return Promise.resolve(pState);
     if (pLoading[def.key]) return pLoading[def.key];
-    toast('Preparo la voce… (qualche secondo la prima volta)');
+    toast('Preparo la voce… (qualche secondo la prima volta)'); phase('carico la voce');
     var p = PiperEngine.loadVoice(def, function (l, t, ph) {
       if (ph === 'init') toast('Preparo la voce…');
       else if (t) toast('Scarico la voce… ' + Math.min(100, Math.round(100 * l / t)) + '%');
     }).then(function (st) {
-      pState = st; pKey = def.key; piperDone[def.key] = true;
+      pState = st; pKey = def.key; piperDone[def.key] = true; phase('voce caricata, prova a vuoto');
       var esp = (st.cfg.espeak && st.cfg.espeak.voice) || 'it';
       // un primo giro "a vuoto": la prima frase vera parte poi molto più in fretta
       return PiperEngine.phonemize(['Prova.'], esp).then(function (ids) {
         return ids[0] && ids[0].length ? PiperEngine.run(st, ids[0], 1) : 0;
-      }).catch(function () {}).then(function () { toast(''); return st; });
+      }).catch(function () {}).then(function () { toast(''); phase('voce pronta'); return st; });
     });
     pLoading[def.key] = p;
     p.then(function () { delete pLoading[def.key]; }, function () { delete pLoading[def.key]; toast(''); });
@@ -678,7 +678,8 @@
   }
 
   // riproduttore: un elemento <audio> (come un lettore musicale) che continua anche a schermo bloccato
-  var evlog = [], runCount = 0;
+  var evlog = [], runCount = 0, crashed = false;
+  function phase(t) { try { localStorage.setItem('lettore-phase', JSON.stringify({ t: t, at: Date.now() })); } catch (e) {} }
   function logEv(t) {
     var d = new Date();
     evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
@@ -771,7 +772,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v12): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v13): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -800,6 +801,7 @@
     }
     function peakOf(pcm) { var m = 0, step = Math.max(1, pcm.length >> 12); for (var q = 0; q < pcm.length; q += step) { var v = Math.abs(pcm[q]); if (v !== v) return 99; if (v > m) m = v; } return m; }
     function runOne(ids) {
+      phase('calcolo audio (frase ' + runCount + ')');
       return PiperEngine.run(st, ids, cfg.rate).then(function (r) {
         var pk = peakOf(r.pcm);
         if ((pk < 0.01 || pk > 50) && r.pcm.length > 3000) {   // pezzo muto o rovinato: nuovo calcolo con un motore nuovo
@@ -818,6 +820,7 @@
         if (t) { idxs.push(j); pieces(t).forEach(function (pt) { texts.push(pt); owner.push(idxs.length - 1); }); }
       }
       if (!idxs.length) { sink.finish(); return null; }
+      phase('fonemi frasi ' + k);
       return PiperEngine.phonemize(texts, esp).then(function (all) {
         var chain = Promise.resolve();
         idxs.forEach(function (si, n) {
@@ -1045,9 +1048,12 @@
     try {
       var pl = localStorage.getItem('lettore-playing');
       if (pl) {
+        var ph = {}; try { ph = JSON.parse(localStorage.getItem('lettore-phase') || '{}'); } catch (e) {}
         var ls = {}; try { ls = JSON.parse(localStorage.getItem('lettore-last') || '{}'); } catch (e) {}
         localStorage.removeItem('lettore-playing');
-        logEv('CHIUSURA IMPROVVISA dopo ' + Math.round(((ls.t || +pl) - +pl) / 1000) + 's, frase ' + (ls.i != null ? ls.i : '?') + ' di ' + (ls.len || '?') + ' caratteri, ' + (ls.n || '?') + ' frasi calcolate');
+        crashed = true;
+        var ok = ls.t && ls.t >= +pl;
+        logEv('CHIUSURA IMPROVVISA: ultima fase "' + (ph.t || '?') + '" a ' + (ph.at && ph.at >= +pl ? Math.round((ph.at - +pl) / 1000) + 's dall\'avvio' : 'tempo ignoto') + '; frasi pronte: ' + (ok ? ls.n : 0));
       }
     } catch (e) {}
     try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
