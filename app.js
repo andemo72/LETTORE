@@ -679,7 +679,16 @@
 
   // riproduttore: un elemento <audio> (come un lettore musicale) che continua anche a schermo bloccato
   var evlog = [], runCount = 0, crashed = false;
-  function phase(t) { try { localStorage.setItem('lettore-phase', JSON.stringify({ t: t, at: Date.now() })); } catch (e) {} }
+  // il telefono salva i dati con calma: scrivere di continuo li fa perdere se l'app si chiude di colpo, quindi scrivo ogni 4 secondi
+  var phPend = null, phTimer = null, lastPend = null;
+  function phFlush() {
+    phTimer = null;
+    try {
+      if (phPend) localStorage.setItem('lettore-phase', JSON.stringify(phPend));
+      if (lastPend) localStorage.setItem('lettore-last', JSON.stringify(lastPend));
+    } catch (e) {}
+  }
+  function phase(t) { phPend = { t: t, at: Date.now() }; if (!phTimer) phTimer = setTimeout(phFlush, 4000); }
   function logEv(t) {
     var d = new Date();
     evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
@@ -841,7 +850,7 @@
                 var pcm = new Float32Array(tot - gap), o = 0;
                 for (x = 0; x < parts.length; x++) { pcm.set(parts[x], o); o += parts[x].length + gap; }
                 diag.gen += (performance.now() - t0) / 1000; diag.aud += pcm.length / rate; showDiag();
-                try { localStorage.setItem('lettore-last', JSON.stringify({ i: si, len: sents[si].t.length, t: Date.now(), n: ++runCount, th: PiperEngine.threads() })); } catch (e) {}
+                lastPend = { i: si, len: sents[si].t.length, t: Date.now(), n: ++runCount }; if (!phTimer) phTimer = setTimeout(phFlush, 4000);
                 sink.add(pcm, rate, si);
               });
             });
