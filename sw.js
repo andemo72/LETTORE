@@ -1,6 +1,6 @@
 // Service worker: salva i file dell'app nel telefono per farla funzionare offline.
 // Strategia: prima prova la rete (così gli aggiornamenti arrivano da soli), se è offline usa la copia salvata.
-var CACHE = 'lettore-v8';
+var CACHE = 'lettore-v9';
 var FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png',
@@ -26,6 +26,15 @@ self.addEventListener('activate', function (e) {
   self.clients.claim();
 });
 
+// intestazioni che rendono l'app "isolata": permettono al calcolo della voce di usare più cuori del telefono
+function iso(r) {
+  if (!r || r.status === 0 || r.type === 'opaque') return r;
+  var h = new Headers(r.headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}
+
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   // le voci scaricate da altri siti (Hugging Face) hanno una loro memoria: qui non le copio
@@ -38,9 +47,9 @@ self.addEventListener('fetch', function (e) {
         var copy = resp.clone();
         caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
       }
-      return resp;
+      return iso(resp);
     }).catch(function () {
-      return caches.match(e.request, { ignoreSearch: true });
+      return caches.match(e.request, { ignoreSearch: true }).then(iso);
     })
   );
 });
