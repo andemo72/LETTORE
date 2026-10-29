@@ -495,6 +495,7 @@
 
   function pause() {
     playing = false; gen++;
+    try { localStorage.removeItem('lettore-playing'); } catch (e) {}
     window.speechSynthesis.cancel();
     piperStop();
     updatePlayBtn();
@@ -770,42 +771,75 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v10): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v11): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
   function piperLoop(st, sink, g, start) {
     var esp = (st.cfg.espeak && st.cfg.espeak.voice) || 'it';
     function room() { return (g === gen && sink.ahead() > 45) ? sleepMs(300).then(room) : null; }
+    // frasi lunghe: calcolate a pezzi (consumano meno memoria: l'iPhone chiude l'app se ne serve troppa) e riunite
+    function pieces(t) {
+      var MAXP = 150;
+      if (t.length <= MAXP) return [t];
+      var res = [], cur = '', parts = t.split(/(?<=[,;:])\s+/);
+      for (var a = 0; a < parts.length; a++) {
+        var pc = parts[a];
+        if (pc.length > MAXP) {
+          if (cur) { res.push(cur); cur = ''; }
+          var ws = pc.split(' '), w = '';
+          for (var k = 0; k < ws.length; k++) {
+            if ((w + ' ' + ws[k]).length > MAXP && w) { res.push(w); w = ws[k]; } else w = w ? w + ' ' + ws[k] : ws[k];
+          }
+          if (w) res.push(w);
+        } else if ((cur + ' ' + pc).length > MAXP && cur) { res.push(cur); cur = pc; }
+        else cur = cur ? cur + ' ' + pc : pc;
+      }
+      if (cur) res.push(cur);
+      return res;
+    }
+    function peakOf(pcm) { var m = 0, step = Math.max(1, pcm.length >> 12); for (var q = 0; q < pcm.length; q += step) { var v = Math.abs(pcm[q]); if (v !== v) return 99; if (v > m) m = v; } return m; }
+    function runOne(ids) {
+      return PiperEngine.run(st, ids, cfg.rate).then(function (r) {
+        var pk = peakOf(r.pcm);
+        if ((pk < 0.01 || pk > 50) && r.pcm.length > 3000) {   // pezzo muto o rovinato: nuovo calcolo con un motore nuovo
+          logEv('pezzo muto (picco ' + pk.toFixed(3) + '): rifaccio');
+          PiperEngine.forceRecycle();
+          return PiperEngine.run(st, ids, cfg.rate);
+        }
+        return r;
+      });
+    }
     function batch(k, size) {
       if (g !== gen) return null;
-      var idxs = [], texts = [];
+      var idxs = [], texts = [], owner = [];
       for (var j = k; j < sents.length && idxs.length < size; j++) {
         var t = spokenText(j);
-        if (t) { idxs.push(j); texts.push(t); }
+        if (t) { idxs.push(j); pieces(t).forEach(function (pt) { texts.push(pt); owner.push(idxs.length - 1); }); }
       }
       if (!idxs.length) { sink.finish(); return null; }
       return PiperEngine.phonemize(texts, esp).then(function (all) {
         var chain = Promise.resolve();
         idxs.forEach(function (si, n) {
           chain = chain.then(function () {
-            if (g !== gen || !all[n] || !all[n].length) return;
+            if (g !== gen) return;
+            var mine = []; owner.forEach(function (o, m) { if (o === n && all[m] && all[m].length) mine.push(all[m]); });
+            if (!mine.length) return;
             return Promise.resolve(room()).then(function () {
               if (g !== gen) return;
-              var t0 = performance.now();
-              function peakOf(pcm) { var m = 0, step = Math.max(1, pcm.length >> 12); for (var q = 0; q < pcm.length; q += step) { var v = Math.abs(pcm[q]); if (v > m || v !== v) m = v !== v ? 99 : v; } return m; }
-              return PiperEngine.run(st, all[n], cfg.rate).then(function (r) {
-                var pk = peakOf(r.pcm);
-                if ((pk < 0.01 || pk > 50) && r.pcm.length > 3000) {   // frase muta o rovinata: nuovo calcolo con un motore nuovo
-                  logEv('frase ' + si + ' muta (picco ' + pk.toFixed(3) + '): rifaccio');
-                  PiperEngine.forceRecycle();
-                  return PiperEngine.run(st, all[n], cfg.rate);
-                }
-                return r;
-              }).then(function (r) {
-                if (g !== gen) return;
-                diag.gen += (performance.now() - t0) / 1000; diag.aud += r.pcm.length / r.rate; showDiag();
-                sink.add(r.pcm, r.rate, si);
+              var t0 = performance.now(), parts = [], rate = 22050, ch = Promise.resolve();
+              mine.forEach(function (ids) {
+                ch = ch.then(function () { if (g !== gen) return; return runOne(ids).then(function (r) { rate = r.rate; parts.push(r.pcm); }); });
+              });
+              return ch.then(function () {
+                if (g !== gen || !parts.length) return;
+                var gap = Math.round(rate * 0.06), tot = 0, x;
+                parts.forEach(function (pc) { tot += pc.length + gap; });
+                var pcm = new Float32Array(tot - gap), o = 0;
+                for (x = 0; x < parts.length; x++) { pcm.set(parts[x], o); o += parts[x].length + gap; }
+                diag.gen += (performance.now() - t0) / 1000; diag.aud += pcm.length / rate; showDiag();
+                try { localStorage.setItem('lettore-last', JSON.stringify({ i: si, len: sents[si].t.length, t: Date.now() })); } catch (e) {}
+                sink.add(pcm, rate, si);
               });
             });
           });
@@ -818,6 +852,7 @@
 
   function piperSpeak(i) {
     playing = true;
+    try { localStorage.setItem('lettore-playing', String(Date.now())); } catch (e) {}
     updatePlayBtn();
     show(i);
     var g = ++gen;
@@ -1007,6 +1042,14 @@
   piperInit();
   openDB().then(function () {
     renderList();
+    try {
+      var pl = localStorage.getItem('lettore-playing');
+      if (pl) {
+        var ls = {}; try { ls = JSON.parse(localStorage.getItem('lettore-last') || '{}'); } catch (e) {}
+        localStorage.removeItem('lettore-playing');
+        logEv('CHIUSURA IMPROVVISA dopo ' + Math.round(((ls.t || +pl) - +pl) / 1000) + 's, frase ' + (ls.i != null ? ls.i : '?') + ' di ' + (ls.len || '?') + ' caratteri');
+      }
+    } catch (e) {}
     try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
