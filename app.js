@@ -623,6 +623,7 @@
     if (!window.PiperEngine) return;
     PiperEngine.listVoices().then(function (defs) {
       piperDefs = defs;
+      PiperEngine.cleanup(defs);   // libera lo spazio delle voci pesanti scaricate in precedenza
       return Promise.all(defs.map(function (d) {
         return PiperEngine.isDownloaded(d).then(function (x) { piperDone[d.key] = x; });
       }));
@@ -657,13 +658,26 @@
       pAudio.setAttribute('playsinline', ''); pAudio.preload = 'auto';
       document.body.appendChild(pAudio);
     }
-    var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false;
+    var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false;
     // suono muto partito dal tocco dell'utente: iOS permette poi di continuare da solo
     au.src = URL.createObjectURL(wavBlob(new Float32Array(2205), 22050, 0));
     var p0 = au.play(); if (p0 && p0.catch) p0.catch(function () {});
+    // se la voce non riesce a stare al passo, invece di fermarsi a ogni frase accumula un po' di audio e riparte
+    function target() { return Math.min(6 + 4 * underruns, 20); }
+    function maybeStart() {
+      if (stopped || curItem || !q.length) return;
+      if (waiting && !done && buffered < target()) return;
+      if (waiting) { waiting = false; toast(''); }
+      next();
+    }
     function next() {
       if (stopped) return;
-      if (!q.length) { curItem = null; if (done && g === gen) pause(); return; }
+      if (!q.length) {
+        curItem = null;
+        if (done && g === gen) { pause(); return; }
+        if (!done) { underruns++; waiting = true; toast('Accumulo un po’ di audio per una lettura più fluida…'); }
+        return;
+      }
       curItem = q.shift();
       au.src = curItem.url;
       var pp = au.play();
@@ -671,22 +685,26 @@
       if (g === gen) show(curItem.i);
     }
     au.onended = function () {
-      if (stopped) return;
-      if (curItem) { URL.revokeObjectURL(curItem.url); buffered -= curItem.dur; curItem = null; }
+      if (stopped || !curItem) return;     // la fine del suono muto iniziale non conta
+      URL.revokeObjectURL(curItem.url); buffered -= curItem.dur; curItem = null;
       next();
     };
     return {
       add: function (pcm, rate, i) {
-        var pad = (sents[i + 1] && sents[i + 1].br && cfg.pauseMs > 0) ? 0.12 + cfg.pauseMs / 1000 : 0.12;
+        var pad = (sents[i + 1] && sents[i + 1].br && cfg.pauseMs > 0) ? 0.10 + cfg.pauseMs / 1000 : 0.10;
         var dur = pcm.length / rate + pad;
         q.push({ url: URL.createObjectURL(wavBlob(pcm, rate, pad)), dur: dur, i: i });
         buffered += dur;
-        if (!curItem) next();
+        maybeStart();
       },
       ahead: function () { return buffered; },
-      finish: function () { done = true; if (!curItem && !q.length && g === gen) pause(); },
+      finish: function () {
+        done = true;
+        if (!curItem && !q.length) { if (g === gen) pause(); } else maybeStart();
+      },
       stop: function () {
         stopped = true; au.onended = null; au.pause();
+        if (waiting) toast('');
         q.forEach(function (it) { URL.revokeObjectURL(it.url); }); q = [];
         if (curItem) { URL.revokeObjectURL(curItem.url); curItem = null; }
       }
@@ -695,10 +713,22 @@
 
   function piperStop() { if (pSink) { pSink.stop(); pSink = null; } }
 
+  // misura di quanto è veloce la voce rispetto al parlato (mostrata in fondo alle impostazioni)
+  var diag = { gen: 0, aud: 0 };
+  function showDiag() {
+    var d = $('diag');
+    if (!d) {
+      d = document.createElement('div'); d.id = 'diag';
+      d.style.cssText = 'margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
+      $('sheet-set').appendChild(d);
+    }
+    d.textContent = diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole)' : '';
+  }
+
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
   function piperLoop(st, sink, g, start) {
     var esp = (st.cfg.espeak && st.cfg.espeak.voice) || 'it';
-    function room() { return (g === gen && sink.ahead() > 30) ? sleepMs(250).then(room) : null; }
+    function room() { return (g === gen && sink.ahead() > 45) ? sleepMs(300).then(room) : null; }
     function batch(k, size) {
       if (g !== gen) return null;
       var idxs = [], texts = [];
@@ -714,11 +744,16 @@
             if (g !== gen || !all[n] || !all[n].length) return;
             return Promise.resolve(room()).then(function () {
               if (g !== gen) return;
-              return PiperEngine.run(st, all[n], cfg.rate).then(function (r) { if (g === gen) sink.add(r.pcm, r.rate, si); });
+              var t0 = performance.now();
+              return PiperEngine.run(st, all[n], cfg.rate).then(function (r) {
+                if (g !== gen) return;
+                diag.gen += (performance.now() - t0) / 1000; diag.aud += r.pcm.length / r.rate; showDiag();
+                sink.add(r.pcm, r.rate, si);
+              });
             });
           });
         });
-        return chain.then(function () { return batch(idxs[idxs.length - 1] + 1, 6); });
+        return chain.then(function () { return batch(idxs[idxs.length - 1] + 1, 8); });
       });
     }
     return Promise.resolve(batch(start, 1));   // la prima volta una frase sola, per partire subito
@@ -731,6 +766,7 @@
     var g = ++gen;
     window.speechSynthesis.cancel();
     piperStop();
+    diag.gen = 0; diag.aud = 0;
     var sink = makeSink(g);          // va creato subito, dentro il tocco dell'utente
     pSink = sink;
     requestWake();

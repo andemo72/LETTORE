@@ -1,6 +1,6 @@
 // Service worker: salva i file dell'app nel telefono per farla funzionare offline.
 // Strategia: prima prova la rete (così gli aggiornamenti arrivano da soli), se è offline usa la copia salvata.
-var CACHE = 'lettore-v5';
+var CACHE = 'lettore-v6';
 var FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png',
@@ -11,7 +11,7 @@ self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
     return c.addAll(FILES).then(function () {
       // il motore delle voci neurali (piccolo): serve già pronto anche senza internet. Se manca, l'app funziona lo stesso.
-      return c.add('lib/piper/engine.js').catch(function () {});
+      return Promise.all([c.add('lib/piper/engine.js'), c.add('lib/piper/worker.js')].map(function (p) { return p.catch(function () {}); }));
     });
   }));
   self.skipWaiting();
