@@ -678,7 +678,7 @@
   }
 
   // riproduttore: un elemento <audio> (come un lettore musicale) che continua anche a schermo bloccato
-  var evlog = [];
+  var evlog = [], runCount = 0;
   function logEv(t) {
     var d = new Date();
     evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
@@ -771,7 +771,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v11): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v12): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -838,7 +838,7 @@
                 var pcm = new Float32Array(tot - gap), o = 0;
                 for (x = 0; x < parts.length; x++) { pcm.set(parts[x], o); o += parts[x].length + gap; }
                 diag.gen += (performance.now() - t0) / 1000; diag.aud += pcm.length / rate; showDiag();
-                try { localStorage.setItem('lettore-last', JSON.stringify({ i: si, len: sents[si].t.length, t: Date.now() })); } catch (e) {}
+                try { localStorage.setItem('lettore-last', JSON.stringify({ i: si, len: sents[si].t.length, t: Date.now(), n: ++runCount, th: PiperEngine.threads() })); } catch (e) {}
                 sink.add(pcm, rate, si);
               });
             });
@@ -1047,7 +1047,7 @@
       if (pl) {
         var ls = {}; try { ls = JSON.parse(localStorage.getItem('lettore-last') || '{}'); } catch (e) {}
         localStorage.removeItem('lettore-playing');
-        logEv('CHIUSURA IMPROVVISA dopo ' + Math.round(((ls.t || +pl) - +pl) / 1000) + 's, frase ' + (ls.i != null ? ls.i : '?') + ' di ' + (ls.len || '?') + ' caratteri');
+        logEv('CHIUSURA IMPROVVISA dopo ' + Math.round(((ls.t || +pl) - +pl) / 1000) + 's, frase ' + (ls.i != null ? ls.i : '?') + ' di ' + (ls.len || '?') + ' caratteri, ' + (ls.n || '?') + ' frasi calcolate');
       }
     } catch (e) {}
     try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
