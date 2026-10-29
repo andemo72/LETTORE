@@ -79,6 +79,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   }
 
   PiperEngine.listVoices().then(function (vs) {
+    vs = vs.concat(PiperEngine.candidates || []);   // più le voci non ufficiali da provare
     voices = vs;
     var sel = $('voice');
     vs.forEach(function (v, i) {
