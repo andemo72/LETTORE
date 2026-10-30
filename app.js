@@ -480,6 +480,44 @@
     return true;
   }
 
+  // ---------- Ascolto a schermo spento / in altre schede ----------
+  var IS_ANDROID = /Android/i.test(navigator.userAgent);
+  var keepAu = null, awayTimer = null, awayStopped = false, AWAY_MIN = 20;
+  // 1 secondo di silenzio vero, in loop: fa considerare l'app "in riproduzione" (notifica con i comandi, niente sospensione)
+  function makeSilentUrl() {
+    var rate = 8000, n = rate, buf = new ArrayBuffer(44 + n), v = new DataView(buf), k;
+    function w(o, str) { for (k = 0; k < str.length; k++) v.setUint8(o + k, str.charCodeAt(k)); }
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    w(36, 'data'); v.setUint32(40, n, true);
+    var u8 = new Uint8Array(buf); for (k = 44; k < 44 + n; k++) u8[k] = 128;
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+  function startKeep() {
+    if (!IS_ANDROID) return;
+    try {
+      if (!keepAu) { keepAu = new Audio(makeSilentUrl()); keepAu.loop = true; }
+      var pr = keepAu.play(); if (pr && pr.catch) pr.catch(function () {});
+    } catch (e) {}
+  }
+  function stopKeep() { if (keepAu) { try { keepAu.pause(); } catch (e) {} } }
+  function setMeta() {
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'Lettore' }); } catch (e) {}
+    }
+  }
+  // controllo "ci sei ancora?": con lo schermo spento (o in un'altra scheda) la lettura si ferma dopo 20 minuti
+  function clearAway() { if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; } }
+  function armAway() {
+    clearAway();
+    if (!playing || document.visibilityState !== 'hidden') return;
+    awayTimer = setTimeout(function () {
+      awayTimer = null;
+      if (playing && document.visibilityState === 'hidden') { awayStopped = true; pause(); }
+    }, AWAY_MIN * 60000);
+  }
+
   function speak(i) {
     if (i < 0 || i >= sents.length) { pause(); return; }
     if (voice && voice.piper) { piperSpeak(i); return; }
@@ -492,13 +530,14 @@
     window.speechSynthesis.cancel();
     setTimeout(function () { if (g === gen) enqueue(i, g); }, 80);
     requestWake();
+    startKeep(); setMeta();
   }
 
   function pause() {
     playing = false; gen++;
     try { localStorage.removeItem('lettore-playing'); } catch (e) {}
     window.speechSynthesis.cancel();
-    piperStop();
+    piperStop(); stopKeep(); clearAway();
     updatePlayBtn();
     releaseWake();
   }
@@ -507,6 +546,7 @@
   var ICO_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
   function updatePlayBtn() {
     $('play').innerHTML = (playing ? ICO_PAUSE : ICO_PLAY) + '<span>' + (playing ? 'Pausa' : 'Leggi') + '</span>';
+    if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (e) {} }
   }
 
   $('play').onclick = function () { if (playing) pause(); else speak(cur); };
@@ -795,7 +835,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v15): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v16): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -883,7 +923,7 @@
     show(i);
     var g = ++gen;
     window.speechSynthesis.cancel();
-    piperStop();
+    piperStop(); stopKeep();
     diag.gen = 0; diag.aud = 0;
     var sink = makeSink(g);          // va creato subito, dentro il tocco dell'utente
     pSink = sink;
@@ -900,10 +940,10 @@
   // comandi sulla schermata di blocco dell'iPhone
   if ('mediaSession' in navigator) {
     try {
-      navigator.mediaSession.setActionHandler('play', function () { if (!playing) speak(cur); });
+      navigator.mediaSession.setActionHandler('play', function () { if (!playing) speak(cur); armAway(); });
       navigator.mediaSession.setActionHandler('pause', function () { pause(); });
-      navigator.mediaSession.setActionHandler('nexttrack', function () { $('next').onclick(); });
-      navigator.mediaSession.setActionHandler('previoustrack', function () { $('prev').onclick(); });
+      navigator.mediaSession.setActionHandler('nexttrack', function () { $('next').onclick(); armAway(); });
+      navigator.mediaSession.setActionHandler('previoustrack', function () { $('prev').onclick(); armAway(); });
     } catch (e) {}
   }
 
@@ -1060,7 +1100,13 @@
   }
   function releaseWake() { if (wake) { wake.release(); wake = null; } }
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && playing) requestWake();
+    if (document.visibilityState === 'visible') {
+      clearAway();
+      if (playing) requestWake();
+      if (awayStopped) { awayStopped = false; toast('Lettura fermata dopo ' + AWAY_MIN + ' minuti a schermo spento. Premi Leggi per continuare.', 7000); }
+    } else {
+      armAway();
+    }
   });
 
   // ---------- Avvio ----------
