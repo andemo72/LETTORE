@@ -10,6 +10,7 @@
 <meta name="theme-color" id="tc" content="#14161a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script>if(/Android/i.test(navigator.userAgent))document.documentElement.className+=' android';</script>
 <title>Lettore</title>
 <style>
 :root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--accTxt:#1a1200;
@@ -89,6 +90,27 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 #pgrid.list{display:block}
 #pgrid.list button{display:block;width:100%;text-align:left;margin-bottom:6px;padding:12px 14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #pgrid button.on{background:var(--acc);color:var(--accTxt);border-color:transparent;font-weight:700}
+/* Android: comandi e impostazioni piu' piccoli (l'iPhone non cambia) */
+.android #ctrl{padding:8px 14px 10px}
+.android #pos{margin:0 0 6px}
+.android #ctrl .row{gap:12px}
+.android .rb{width:48px;height:48px}
+.android .rb svg{width:22px;height:22px}
+.android .pb{height:52px;min-width:130px;border-radius:26px;font-size:16px;gap:8px}
+.android .pb svg{width:24px;height:24px}
+.android .sheet{padding:8px 16px calc(16px + env(safe-area-inset-bottom))}
+.android .sheet h2{font-size:15px}
+.android .sheet h3{font-size:11px;margin:12px 0 4px}
+.android .sheet select{font-size:14px;padding:9px}
+.android .sheet label{font-size:12px;margin:8px 0 2px}
+.android .chip{padding:7px 12px;font-size:13px}
+.android .sw{font-size:11px}
+.android .sw i{width:38px;height:38px}
+.android .chk{font-size:13px!important;margin-top:10px!important}
+.android .goto input{font-size:15px;padding:8px 10px}
+.android #pgrid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr))}
+.android #pgrid button{padding:8px 0;font-size:14px}
+.android #pgrid.list button{padding:10px 12px;font-size:14px}
 </style>
 </head>
 <body>
