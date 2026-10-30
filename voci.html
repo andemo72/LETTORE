@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prova voci</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 0; padding: 16px; background: #fff; color: #111; font-size: 17px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .info { background: #f2f2f7; padding: 10px; border-radius: 10px; margin-bottom: 12px; font-size: 15px; }
+  .v { border: 1px solid #ccc; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .it { border-color: #0a7d2c; background: #eaf7ee; }
+  .v b { display: block; font-size: 18px; }
+  .v small { color: #555; }
+  button { font-size: 17px; padding: 10px 16px; border-radius: 10px; border: 0; background: #0a64d8; color: #fff; margin-top: 6px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #000; color: #eee; }
+    .info { background: #1c1c1e; }
+    .v { border-color: #444; }
+    .it { border-color: #2ea04f; background: #10301a; }
+    .v small { color: #aaa; }
+  }
+</style>
+</head>
+<body>
+<h1>Voci che Safari vede</h1>
+<div class="info" id="info">Caricamento...</div>
+<div id="list"></div>
+<script>
+(function () {
+  var list = document.getElementById('list');
+  var info = document.getElementById('info');
+  var tries = 0;
+
+  function show() {
+    var vs = window.speechSynthesis.getVoices();
+    var it = 0, i;
+    for (i = 0; i < vs.length; i++) {
+      if (String(vs[i].lang).toLowerCase().indexOf('it') === 0) { it++; }
+    }
+    info.innerHTML = '<b>Totale voci: ' + vs.length + '</b><br>In italiano: <b>' + it + '</b><br>' +
+      '<small>' + navigator.userAgent + '</small>';
+    list.innerHTML = '';
+    for (i = 0; i < vs.length; i++) {
+      var v = vs[i];
+      var isIt = String(v.lang).toLowerCase().indexOf('it') === 0;
+      var d = document.createElement('div');
+      d.className = 'v' + (isIt ? ' it' : '');
+      d.innerHTML = '<b>' + v.name + '</b><small>' + v.lang +
+        ' · locale: ' + v.localService + ' · default: ' + v['default'] + '</small><br>';
+      var b = document.createElement('button');
+      b.textContent = 'Prova';
+      b.setAttribute('data-i', i);
+      b.onclick = function () {
+        var vv = window.speechSynthesis.getVoices()[this.getAttribute('data-i')];
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance('Buongiorno, questa è una prova della voce.');
+        u.voice = vv;
+        u.lang = vv.lang;
+        window.speechSynthesis.speak(u);
+      };
+      d.appendChild(b);
+      list.appendChild(d);
+    }
+  }
+
+  function poll() {
+    tries++;
+    show();
+    if (tries < 10) { setTimeout(poll, 1000); }
+  }
+
+  if (!window.speechSynthesis) {
+    info.textContent = 'Questo browser non ha SpeechSynthesis.';
+    return;
+  }
+  window.speechSynthesis.onvoiceschanged = show;
+  poll();
+})();
+</script>
+</body>
+</html>
