@@ -455,6 +455,7 @@
     u.rate = cfg.rate; u.pitch = cfg.pitch;
     u.onstart = function () {
       if (g !== gen) return;
+      lastSpeechAt = Date.now();
       show(idx);
       var nx = idx + 1;
       // a fine paragrafo non metto in coda la frase dopo: lascio una piccola pausa, come un lettore umano
@@ -482,6 +483,8 @@
 
   // ---------- Ascolto a schermo spento / in altre schede ----------
   var IS_ANDROID = /Android/i.test(navigator.userAgent);
+  var lastSpeechAt = 0, lastBeat = Date.now(), hiddenAt = 0;
+  setInterval(function () { lastBeat = Date.now(); }, 5000);
   var keepAu = null, awayTimer = null, awayStopped = false, AWAY_MIN = 20;
   // 1 secondo di silenzio vero, in loop: fa considerare l'app "in riproduzione" (notifica con i comandi, niente sospensione)
   function makeSilentUrl() {
@@ -495,7 +498,6 @@
     return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   }
   function startKeep() {
-    if (!IS_ANDROID) return;
     try {
       if (!keepAu) { keepAu = new Audio(makeSilentUrl()); keepAu.loop = true; }
       var pr = keepAu.play(); if (pr && pr.catch) pr.catch(function () {});
@@ -746,7 +748,7 @@
   function logEv(t) {
     var d = new Date();
     evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
-    if (evlog.length > 8) evlog.shift();
+    if (evlog.length > 10) evlog.shift();
     try { showDiag(); } catch (e) {}
   }
   function makeSink(g) {
@@ -835,7 +837,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v16): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v17): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1101,10 +1103,18 @@
   function releaseWake() { if (wake) { wake.release(); wake = null; } }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
+      if (hiddenAt) {
+        var tot = Math.round((Date.now() - hiddenAt) / 1000);
+        var alive = Math.max(0, Math.round((lastBeat - hiddenAt) / 1000));
+        var spoke = lastSpeechAt > hiddenAt ? Math.round((lastSpeechAt - hiddenAt) / 1000) + 's' : 'mai';
+        logEv('riacceso dopo ' + tot + 's; app attiva ~' + alive + 's; ultima frase a ' + spoke);
+        hiddenAt = 0;
+      }
       clearAway();
       if (playing) requestWake();
       if (awayStopped) { awayStopped = false; toast('Lettura fermata dopo ' + AWAY_MIN + ' minuti a schermo spento. Premi Leggi per continuare.', 7000); }
     } else {
+      if (playing) { hiddenAt = Date.now(); lastBeat = hiddenAt; logEv('schermo spento'); }
       armAway();
     }
   });
