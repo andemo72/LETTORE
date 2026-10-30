@@ -21,6 +21,9 @@
 [data-theme=sepia]{--bg:#f4ecd8;--card:#eadfc4;--txt:#433422;--mut:#7a6a52;--acc:#b4651b;--accTxt:#fff8ea;
   --hl:#f0d58c;--curtxt:#3a2b1a;--line:#dccfae;--bd:#cfc19a;--ctrl:#ede3ca;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{overscroll-behavior-y:none}
+button,input,select{touch-action:manipulation}
+#text{overscroll-behavior-y:contain}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 .view{display:none;height:100%;flex-direction:column}

@@ -229,15 +229,25 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 
     PiperEngine.loadVoice(v, progress).then(function (st) {
       state = st; $('bar').style.display = 'none'; refresh();
-      var t0 = Date.now();
-      return PiperEngine.phonemize(sents, st.cfg.espeak && st.cfg.espeak.voice ? st.cfg.espeak.voice : 'it').then(function (ids) {
-        log('Fonemi pronti in ' + (Date.now() - t0) + ' ms');
-        return ids;
-      });
-    }).then(function (allIds) {
+      return st;
+    }).then(function () {
+      // fonemi a gruppi di 8 frasi (come nell'app): testi lunghi non fanno esaurire la memoria
+      var allIds = [], esp = state.cfg.espeak && state.cfg.espeak.voice ? state.cfg.espeak.voice : 'it';
+      function ensure(i) {
+        if (allIds[i] !== undefined) return Promise.resolve();
+        var t0 = Date.now();
+        return PiperEngine.phonemize(sents.slice(i, i + 8), esp).then(function (ids) {
+          for (var q = 0; q < ids.length; q++) allIds[i + q] = ids[q] || [];
+          var okN = ids.filter(function (a) { return a && a.length; }).length;
+          log('Fonemi frasi ' + (i + 1) + '-' + (i + ids.length) + ': ' + okN + ' pronte su ' + ids.length + ' (' + (Date.now() - t0) + ' ms)');
+        });
+      }
       var chain = Promise.resolve();
       sents.forEach(function (s, i) {
         chain = chain.then(function () {
+          if (stopFlag) return;
+          return ensure(i);
+        }).then(function () {
           if (stopFlag || !allIds[i] || !allIds[i].length) return;
           function wait() { return (mySink.ahead() > mySink.limit && !stopFlag) ? sleep(250).then(wait) : null; }
           return Promise.resolve(wait()).then(function () {

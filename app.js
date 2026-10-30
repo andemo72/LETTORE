@@ -311,6 +311,7 @@
       pageStart = -1;
       try { localStorage.setItem('lettore-open', String(id)); } catch (e) {}
       showView('v-read');
+      if (!histPushed) { try { history.pushState({ r: 1 }, ''); histPushed = true; } catch (e) {} }
       updatePlayBtn();
       show(cur, true);
       if (!crashed && voice && voice.piper && piperDone[voice.def.key]) piperEnsure(voice.def).catch(function () {});
@@ -512,7 +513,20 @@
   $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) speak(n); else show(n); };
   $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) speak(n); else show(n); };
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
-  $('back').onclick = function () { try { localStorage.removeItem('lettore-open'); } catch (e) {} pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); };
+  // tasto indietro del telefono (Android): chiude i pannelli, poi torna alla libreria invece di uscire dall'app
+  var histPushed = false;
+  function goBack() { try { localStorage.removeItem('lettore-open'); } catch (e) {} pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); }
+  $('back').onclick = function () { if (histPushed) { history.back(); } else { goBack(); } };
+  window.addEventListener('popstate', function () {
+    histPushed = false;
+    if (!$('v-read').classList.contains('on')) return;
+    if ($('sheet-pages').classList.contains('open') || $('sheet-set').classList.contains('open')) {
+      closeSheets();
+      try { history.pushState({ r: 1 }, ''); histPushed = true; } catch (e) {}
+      return;
+    }
+    goBack();
+  });
 
   // ---------- Pannelli che salgono dal basso ----------
   function closeSheets() {
@@ -781,7 +795,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v13): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v14): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
