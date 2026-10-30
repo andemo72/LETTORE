@@ -290,7 +290,7 @@
   var voices = [], voice = null;
   var marks = [], mkind = 'sez';
   var sleepTimer = null, wake = null;
-  var cfg = { voiceURI: '', rate: 1, pitch: 1, symbols: true, theme: 'dark', fs: 19, pauseMs: 400 };
+  var cfg = { voiceURI: '', rate: 1, pitch: 1, symbols: true, lockText: false, theme: 'dark', fs: 19, pauseMs: 400 };
   try { var sv = JSON.parse(localStorage.getItem('lettore-cfg')); if (sv) for (var k in sv) cfg[k] = sv[k]; } catch (e) {}
   function saveCfg() { try { localStorage.setItem('lettore-cfg', JSON.stringify(cfg)); } catch (e) {} }
 
@@ -837,7 +837,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v18): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v19): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1028,6 +1028,15 @@
     alert('Questo browser non supporta la sintesi vocale.');
   }
 
+  // blocco del testo: i tocchi sullo schermo non spostano nulla; si sblocca da qui
+  function applyLock() {
+    var on = !!cfg.lockText;
+    if (on) { $('text').classList.add('locked'); $('v-read').classList.add('tl'); }
+    else { $('text').classList.remove('locked'); $('v-read').classList.remove('tl'); }
+    $('lock').checked = on;
+  }
+  $('lock').onchange = function () { cfg.lockText = this.checked; saveCfg(); applyLock(); };
+  applyLock();
   $('sym').checked = cfg.symbols;
   $('sym').onchange = function () {
     cfg.symbols = this.checked; saveCfg();
