@@ -114,12 +114,18 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 .android #pgrid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr))}
 .android #pgrid button{padding:8px 0;font-size:14px}
 .android #pgrid.list button{padding:10px 12px;font-size:14px}
+.sheet input[type=url],.sheet input[type=text],.sheet textarea{width:100%;background:var(--card);color:var(--txt);border:1px solid var(--bd);border-radius:10px;padding:12px;font-size:16px;font-family:inherit;margin:4px 0}
+.sheet textarea{resize:vertical}
+.sheet button.acc{width:100%;padding:13px;border-radius:12px;font-size:16px;margin:6px 0}
+#art-msg{font-size:14px;min-height:18px;margin:2px 0 4px}
+#addart{margin-right:2px}
 </style>
 </head>
 <body>
 
 <div id="v-lib" class="view on">
   <header><h1>📚 La mia libreria</h1>
+    <button class="acc" id="addart">📰 Articolo</button>
     <button class="acc" id="add">+ Aggiungi</button></header>
   <div id="status"></div>
   <div id="list"></div>
@@ -172,6 +178,19 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 </div>
 
 <!-- Pannello IMPOSTAZIONI -->
+<div id="sheet-art" class="sheet">
+  <div class="grab"></div>
+  <h2>Aggiungi un articolo</h2>
+  <h3>Da un link</h3>
+  <input type="url" id="art-url" placeholder="Incolla qui l'indirizzo dell'articolo" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button class="acc" id="art-go">Scarica e aggiungi</button>
+  <div id="art-msg"></div>
+  <h3>Oppure incolla il testo</h3>
+  <input type="text" id="art-title" placeholder="Titolo (facoltativo)">
+  <textarea id="art-text" rows="5" placeholder="Incolla qui il testo dell'articolo"></textarea>
+  <button class="acc" id="art-add">Aggiungi il testo</button>
+</div>
+
 <div id="sheet-set" class="sheet">
   <div class="grab"></div>
   <h2>Impostazioni</h2>

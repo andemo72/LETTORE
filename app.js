@@ -185,6 +185,139 @@
     });
   }
 
+  // ---------- Articoli di giornale ----------
+  var ARTICLE_PROXY = 'https://lettore-articoli-bbc4.topaus123.workers.dev/';
+  var JUNK_TAGS = 'script,style,noscript,template,nav,header,footer,aside,form,iframe,svg,button,select,figure,dialog,[hidden],[aria-hidden="true"]';
+  var JUNK_RE = /(^|[\s_-])(comments?|commenti|share|social|related|correlat\w*|newsletter|cookie|consent|banner|advert\w*|ads?|promo\w*|sidebar|breadcrumb\w*|subscribe|outbrain|taboola|widget|popup|modal|tags?|author-box|read-more|more-news)($|[\s_-])/i;
+  var BOILER_RE = /^(leggi anche|leggi tutto|continua a leggere|iscriviti|accedi|abbonati|registrati|pubblicit[aà]|advertisement|condividi|seguici|ti potrebbe interessare|potrebbe interessarti|©|copyright|tutti i diritti)/i;
+
+  function linkLen(el) {
+    var as = el.querySelectorAll('a'), n = 0, i;
+    for (i = 0; i < as.length; i++) n += as[i].textContent.length;
+    return n;
+  }
+  function articleTitle(doc) {
+    var m = doc.querySelector('meta[property="og:title"]') || doc.querySelector('meta[name="twitter:title"]');
+    var t = (m && m.getAttribute('content')) || '';
+    if (!t) { var h = doc.querySelector('h1'); t = h ? h.textContent : ''; }
+    if (!t) t = doc.title || '';
+    t = t.replace(/\s+/g, ' ').trim();
+    var parts = t.split(/\s+[|–—]\s+/);
+    if (parts[0].length >= 15) t = parts[0];
+    return t.slice(0, 160) || 'Articolo';
+  }
+  // molti giornali inseriscono il testo intero in un blocco "articleBody" (dati per i motori di ricerca)
+  function ldBody(doc) {
+    var best = '', nodes = doc.querySelectorAll('script[type="application/ld+json"]'), n;
+    function walk(o, depth) {
+      if (!o || depth > 6 || typeof o !== 'object') return;
+      if (Object.prototype.toString.call(o) === '[object Array]') { for (var i = 0; i < o.length; i++) walk(o[i], depth + 1); return; }
+      if (typeof o.articleBody === 'string' && o.articleBody.length > best.length) best = o.articleBody;
+      for (var k in o) { if (o[k] && typeof o[k] === 'object') walk(o[k], depth + 1); }
+    }
+    for (n = 0; n < nodes.length; n++) { try { walk(JSON.parse(nodes[n].textContent), 0); } catch (e) {} }
+    if (/<\w+[^>]*>/.test(best)) best = readHtmlString('<body>' + best + '</body>');
+    return best;
+  }
+  // cerca il contenitore con più paragrafi "veri" e ne tiene solo il testo
+  function domBody(doc) {
+    var i, j, el, junk = doc.querySelectorAll(JUNK_TAGS);
+    for (i = 0; i < junk.length; i++) if (junk[i].parentNode) junk[i].parentNode.removeChild(junk[i]);
+    var all = doc.querySelectorAll('[class],[id]');
+    for (i = 0; i < all.length; i++) {
+      el = all[i];
+      if (!el.parentNode) continue;
+      var tg = el.tagName;
+      if (tg === 'ARTICLE' || tg === 'MAIN' || tg === 'BODY' || tg === 'HTML') continue;
+      var ci = (el.getAttribute('class') || '') + ' ' + (el.id || '');
+      if (JUNK_RE.test(ci) && !el.querySelector('article')) el.parentNode.removeChild(el);
+    }
+    var ps = doc.querySelectorAll('p'), nodes = [], scores = [];
+    function add(node, s) { var ix = nodes.indexOf(node); if (ix < 0) { nodes.push(node); scores.push(s); } else scores[ix] += s; }
+    for (i = 0; i < ps.length; i++) {
+      var tx = ps[i].textContent.replace(/\s+/g, ' ').trim();
+      if (tx.length < 40 || linkLen(ps[i]) > tx.length * 0.5) continue;
+      var s = 1 + (tx.split(',').length - 1) + Math.min(Math.floor(tx.length / 100), 3);
+      var par = ps[i].parentNode;
+      if (par) { add(par, s); if (par.parentNode) add(par.parentNode, s / 2); }
+    }
+    var best = null, bestScore = 0;
+    for (i = 0; i < nodes.length; i++) if (scores[i] > bestScore) { bestScore = scores[i]; best = nodes[i]; }
+    if (!best) return '';
+    var up = true;
+    while (up && best.parentNode && best.parentNode.tagName !== 'BODY' && best.parentNode.tagName !== 'HTML') {
+      var pix = nodes.indexOf(best.parentNode);
+      if (pix >= 0 && scores[pix] >= bestScore * 0.75) { best = best.parentNode; bestScore = scores[pix]; } else up = false;
+    }
+    var out = [], seen = {}, els = best.querySelectorAll('p,h2,h3,h4,blockquote,li');
+    for (j = 0; j < els.length; j++) {
+      el = els[j];
+      var t = el.textContent.replace(/\s+/g, ' ').trim(), tag = el.tagName;
+      if (!t || seen[t]) continue;
+      if (tag === 'BLOCKQUOTE' && el.querySelector('p')) continue;
+      if (tag === 'LI' && t.length < 60) continue;
+      if (/^H\d$/.test(tag)) { if (t.length < 5 || t.length > 140) continue; }
+      else if (t.length < 25) continue;
+      if (linkLen(el) > t.length * 0.5 || BOILER_RE.test(t)) continue;
+      seen[t] = 1; out.push(t);
+    }
+    return out.join('\n\n');
+  }
+  function extractArticle(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var title = articleTitle(doc);
+    var ld = cleanText(ldBody(doc)), dom = '';
+    try { dom = domBody(doc); } catch (e) {}
+    var body = (ld.length >= 600 && ld.length >= dom.length * 0.7) || !dom ? ld : dom;
+    if (body.slice(0, title.length) === title) body = body.slice(title.length).trim();
+    return { title: title, text: title + '.\n\n' + body, chars: body.length };
+  }
+  function decodeHtml(buf, ct) {
+    var m = /charset=([\w-]+)/i.exec(ct || ''), cs = m ? m[1] : '', i;
+    if (!cs) {
+      var u8 = new Uint8Array(buf, 0, Math.min(buf.byteLength, 3000)), head = '';
+      for (i = 0; i < u8.length; i++) head += String.fromCharCode(u8[i]);
+      var m2 = /charset=["']?([\w-]+)/i.exec(head);
+      cs = m2 ? m2[1] : 'utf-8';
+    }
+    try { return new TextDecoder(cs).decode(buf); } catch (e) { return new TextDecoder('utf-8').decode(buf); }
+  }
+  function fetchArticle(raw) {
+    var url = (raw || '').trim();
+    if (!/^https?:\/\//i.test(url)) {
+      if (/^[\w-]+(\.[\w-]+)+/.test(url)) url = 'https://' + url;
+      else return Promise.reject(new Error('Incolla un indirizzo che inizi con https://'));
+    }
+    url = url.replace(/^http:\/\//i, 'https://');
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 20000);
+    return fetch(ARTICLE_PROXY + '?url=' + encodeURIComponent(url), ctl ? { signal: ctl.signal } : {})
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (j) { throw new Error((j && j.error) || ('Errore ' + res.status)); });
+        }
+        var ct = res.headers.get('Content-Type') || '';
+        return res.arrayBuffer().then(function (buf) { return decodeHtml(buf, ct); });
+      })
+      .then(function (html) { clearTimeout(timer); return extractArticle(html); },
+        function (e) {
+          clearTimeout(timer);
+          if (e && e.name === 'AbortError') throw new Error('Il sito ci mette troppo a rispondere.');
+          if (e instanceof TypeError) throw new Error('Non riesco a contattare il servizio. Controlla la connessione.');
+          throw e;
+        });
+  }
+  function saveTextBook(title, raw, src) {
+    var text = cleanText(raw), total = splitSentences(text).length;
+    if (text.length < 20 || !total) return Promise.reject(new Error('Nessun testo trovato.'));
+    var id = 'b' + Date.now() + Math.floor(Math.random() * 1000);
+    return dbPut('texts', { id: id, text: text }).then(function () {
+      return dbPut('books', { id: id, title: title, pos: 0, total: total, kind: 'sez', marks: [],
+        added: Date.now(), last: Date.now(), src: src || '' });
+    });
+  }
+  // ---------- fine articoli ----------
+
   // ---------- Divisione in frasi ----------
   function splitSentences(text) {
     var out = [];
@@ -282,6 +415,34 @@
       });
     });
     chain.then(function () { setStatus(''); input.value = ''; renderList(); });
+  };
+
+  // ---------- Pannello "Aggiungi articolo" ----------
+  function artMsg(t, bad) { var m = $('art-msg'); m.textContent = t || ''; m.style.color = bad ? '#e5534b' : 'var(--mut)'; }
+  function artDone() {
+    $('art-url').value = ''; $('art-text').value = ''; $('art-title').value = '';
+    artMsg('');
+    closeSheets();
+    renderList();
+  }
+  $('addart').onclick = function () { artMsg(''); openSheet('sheet-art'); };
+  $('art-go').onclick = function () {
+    var btn = this, url = $('art-url').value;
+    if (!url.trim()) { artMsg('Incolla prima l\'indirizzo dell\'articolo.', true); return; }
+    btn.disabled = true; artMsg('Scarico l\'articolo…');
+    fetchArticle(url).then(function (a) {
+      if (a.chars < 50) throw new Error('Non trovo il testo dell\'articolo: il sito potrebbe bloccare il download o essere a pagamento. Copia il testo e incollalo qui sotto.');
+      if (a.chars < 400 && !confirm('Ho trovato poco testo (' + a.chars + ' caratteri): forse l\'articolo è a pagamento o il sito lo carica in un secondo momento. Lo aggiungo lo stesso?')) {
+        artMsg('Non aggiunto. Prova a copiare il testo e incollarlo qui sotto.', true); return;
+      }
+      return saveTextBook(a.title, a.text, url).then(artDone);
+    }).catch(function (e) { artMsg(e.message, true); }).then(function () { btn.disabled = false; });
+  };
+  $('art-add').onclick = function () {
+    var txt = $('art-text').value, ttl = $('art-title').value.trim();
+    if (txt.trim().length < 20) { artMsg('Incolla il testo dell\'articolo nel riquadro.', true); return; }
+    if (!ttl) ttl = txt.trim().split(/\n/)[0].slice(0, 70);
+    saveTextBook(ttl, ttl + '.\n\n' + txt, '').then(artDone).catch(function (e) { artMsg(e.message, true); });
   };
 
   // ---------- Lettore ----------
@@ -574,6 +735,7 @@
   function closeSheets() {
     $('sheet-pages').classList.remove('open');
     $('sheet-set').classList.remove('open');
+    $('sheet-art').classList.remove('open');
     $('bk').classList.remove('on');
   }
   function openSheet(id) {
@@ -837,7 +999,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v20): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v21): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
