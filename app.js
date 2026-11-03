@@ -344,6 +344,20 @@
     }
     return out;
   }
+  var PAGENUM_RE = /^[\s\-–—·•\[(]*(?:pag(?:ina|\.)?|p\.|page)?\s*\d{1,4}\s*[\])\-–—·•]*$/i;
+  function markNoise(list) {
+    var cnt = {}, seen = {}, i, k;
+    function key(t) { return t.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim(); }
+    for (i = 0; i < list.length; i++) {
+      var t = list[i].t;
+      if (t.length > 90 || /[.!?…]["'»”’)\]]*$/.test(t)) continue;
+      k = key(t); cnt[k] = (cnt[k] || 0) + 1;
+    }
+    for (i = 0; i < list.length; i++) {
+      k = key(list[i].t);
+      if (cnt[k] >= 3) { if (seen[k]) list[i].skip = true; else seen[k] = 1; }
+    }
+  }
   function chunkLong(s) {
     var MAX = 280;
     if (s.length <= MAX) return [s];
@@ -553,7 +567,7 @@
   function openBook(id) {
     Promise.all([dbGet('books', id), dbGet('texts', id)]).then(function (r) {
       book = r[0];
-      sents = splitSentences(r[1].text);
+      sents = splitSentences(r[1].text); markNoise(sents);
       if (book.marks && book.marks.length) {
         marks = book.marks.filter(function (m) { return m.i < sents.length; });
         mkind = book.kind || 'sez';
@@ -683,6 +697,7 @@
   var SYM_RE = /[%&€$£@#+=<>\/\\*_^~|°§©®™×÷±≤≥≠∞→←•⁄]/g;
 
   function spokenText(i) {
+    if (sents[i].skip || PAGENUM_RE.test(sents[i].t)) return '';
     var t = sents[i].t;
     try { t = t.normalize('NFKC'); } catch (e) {}              // ligature (ﬁ, ﬂ) e simboli strani -> normali
     t = t.replace(/[­​-‍⁠﻿]/g, '');   // caratteri invisibili
@@ -695,6 +710,11 @@
       if (map) t = t.replace(SYM_RE, function (c) { return map[c] || ' '; });
     }
     t = t.replace(/\s+/g, ' ').trim();
+    var nxs = sents[i + 1];
+    if (nxs && /[\p{L}\p{N}]$/u.test(t) && /^[«“"(]?[A-ZÀ-ÖØ-Þ]/.test(nxs.t.trim())) t += '.';
+    t = t.replace(/([:;])\s+/g, '$1 … ');
+    t = t.replace(/\s([«“])/g, ' … $1');
+    t = t.replace(/([»”])(?=\s)/g, '$1 …');
     return /[\p{L}\p{N}]/u.test(t) ? t : '';   // frasi di soli simboli muti: saltate
   }
 
@@ -1104,7 +1124,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v26): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v27): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
