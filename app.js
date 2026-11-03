@@ -375,13 +375,64 @@
     $('v-read').className = 'view' + (id === 'v-read' ? ' on' : '');
   }
 
+  // ---- selezione multipla (v24) ----
+  var selMode = false, sel = {}, rows = {}, selPushed = false, longFired = false;
+  function selCount() { var n = 0; for (var k in sel) if (sel[k]) n++; return n; }
+  function updateSel() {
+    $('v-lib').classList.toggle('sel', selMode);
+    $('list').classList.toggle('sel', selMode);
+    var n = selCount(), tot = 0, id;
+    for (id in rows) {
+      tot++;
+      rows[id].d.classList.toggle('picked', !!sel[id]);
+      rows[id].c.textContent = sel[id] ? '✓' : '';
+    }
+    $('sel-del').textContent = '🗑 Elimina' + (n ? ' (' + n + ')' : '');
+    $('sel-del').disabled = !n;
+    $('sel-all').textContent = (tot && n === tot) ? 'Deseleziona tutto' : 'Seleziona tutto';
+  }
+  function selEnter(id) {
+    selMode = true; sel = {}; sel[id] = true;
+    if (!selPushed) { try { history.pushState({ s: 1 }, ''); selPushed = true; } catch (e) {} }
+    try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+    updateSel();
+  }
+  function selExit(fromPop) {
+    selMode = false; sel = {};
+    updateSel();
+    if (fromPop) selPushed = false;
+    else if (selPushed) { selPushed = false; try { history.back(); } catch (e) {} }
+  }
+  function selToggle(id) {
+    sel[id] = !sel[id];
+    updateSel();
+  }
+  $('sel-cancel').onclick = function () { selExit(false); };
+  $('sel-all').onclick = function () {
+    var all = selCount() === Object.keys(rows).length;
+    sel = {};
+    if (!all) for (var id in rows) sel[id] = true;
+    updateSel();
+  };
+  $('sel-del').onclick = function () {
+    var ids = [], id;
+    for (id in sel) if (sel[id] && rows[id]) ids.push(rows[id].id);
+    if (!ids.length) return;
+    var msg = ids.length === 1 ? 'Eliminare "' + rows[String(ids[0])].title + '"?' : 'Eliminare ' + ids.length + ' documenti? Non si può annullare.';
+    if (!confirm(msg)) return;
+    Promise.all(ids.map(function (i) { return Promise.all([dbDel('books', i), dbDel('texts', i)]); }))
+      .then(function () { selExit(false); renderList(); });
+  };
+
   function renderList() {
     dbAll('books').then(function (books) {
       books.sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
       var box = $('list');
       box.innerHTML = '';
+      rows = {};
       if (!books.length) {
         box.innerHTML = '<div class="empty"><b>Nessun libro ancora.</b><br>Tocca <b>+ Aggiungi</b> per caricare un PDF, EPUB, Word o TXT dall\'app File del tuo iPhone.</div>';
+        if (selMode) selExit(false);
         return;
       }
       books.forEach(function (b) {
@@ -395,16 +446,41 @@
         var bar = document.createElement('div'); bar.className = 'bar';
         bar.innerHTML = '<i style="width:' + pct + '%"></i>';
         t.appendChild(bt); t.appendChild(sm); t.appendChild(bar);
-        var del = document.createElement('button'); del.textContent = '🗑';
-        d.appendChild(t); d.appendChild(del);
-        t.onclick = function () { openBook(b.id); };
-        del.onclick = function () {
+        var del = document.createElement('button'); del.className = 'del'; del.textContent = '🗑';
+        var chk = document.createElement('span'); chk.className = 'chkc';
+        d.appendChild(t); d.appendChild(del); d.appendChild(chk);
+        rows[String(b.id)] = { id: b.id, title: b.title, d: d, c: chk };
+        d.onclick = function (e) {
+          if (longFired) { longFired = false; return; }
+          if (selMode) { selToggle(String(b.id)); return; }
+          if (t.contains(e.target)) openBook(b.id);
+        };
+        del.onclick = function (e) {
+          e.stopPropagation();
           if (confirm('Eliminare "' + b.title + '"?')) {
             Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
           }
         };
+        // pressione lunga: entra nella selezione
+        var timer = null, x0 = 0, y0 = 0;
+        function stopT() { if (timer) { clearTimeout(timer); timer = null; } }
+        d.addEventListener('pointerdown', function (e) {
+          longFired = false;
+          if (selMode || e.target === del) return;
+          x0 = e.clientX; y0 = e.clientY; stopT();
+          timer = setTimeout(function () { timer = null; longFired = true; selEnter(String(b.id)); }, 450);
+        });
+        d.addEventListener('pointermove', function (e) {
+          if (timer && (Math.abs(e.clientX - x0) > 10 || Math.abs(e.clientY - y0) > 10)) stopT();
+        });
+        d.addEventListener('pointerup', stopT);
+        d.addEventListener('pointercancel', stopT);
+        d.addEventListener('contextmenu', function (e) { e.preventDefault(); });
         box.appendChild(d);
       });
+      // se sparisce un documento mentre si seleziona, lo si toglie dalla selezione
+      for (var k in sel) if (!rows[k]) delete sel[k];
+      updateSel();
     });
   }
 
@@ -740,6 +816,8 @@
   function goBack() { try { localStorage.removeItem('lettore-open'); } catch (e) {} pause(); clearSleep(); closeSheets(); showView('v-lib'); renderList(); }
   $('back').onclick = function () { if (histPushed) { history.back(); } else { goBack(); } };
   window.addEventListener('popstate', function () {
+    if (selMode) { selExit(true); return; }
+    selPushed = false;
     histPushed = false;
     if (!$('v-read').classList.contains('on')) return;
     if ($('sheet-pages').classList.contains('open') || $('sheet-set').classList.contains('open')) {
@@ -764,6 +842,14 @@
   }
   $('bk').onclick = closeSheets;
   $('gear').onclick = function () { openSheet('sheet-set'); };
+
+  // ---------- Torna all'inizio (v24) ----------
+  $('totop').onclick = function () {
+    if (!sents.length) return;
+    if (playing) pause();
+    show(0, true);
+    $('text').scrollTop = 0;
+  };
 
   // ---------- Pagine ----------
   function goMark(k) {
@@ -1018,7 +1104,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v23): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v24): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce

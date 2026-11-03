@@ -119,6 +119,22 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 .sheet button.acc{width:100%;padding:13px;border-radius:12px;font-size:16px;margin:6px 0}
 #art-msg{font-size:14px;min-height:18px;margin:2px 0 4px}
 #addart{margin-right:2px}
+
+/* selezione multipla in libreria (v24) */
+.book{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.book .chkc{display:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--acc);align-items:center;justify-content:center;flex:none;font-weight:700;font-size:17px;color:var(--accTxt);line-height:1}
+#list.sel .book .del{display:none}
+#list.sel .book .chkc{display:flex}
+.book.picked{outline:2px solid var(--acc)}
+.book.picked .chkc{background:var(--acc)}
+#selbar{display:none;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--bg)}
+#v-lib.sel #selbar{display:block}
+#v-lib.sel > header{display:none}
+#selbar button{width:100%;padding:11px;border-radius:12px;font-weight:700}
+#selbar .r2{display:flex;gap:8px;margin-top:8px}
+#selbar .r2 button{flex:1;font-weight:600}
+#sel-del{background:#e5534b;color:#fff;border:none}
+#sel-del:disabled{opacity:.4}
 </style>
 </head>
 <body>
@@ -127,6 +143,10 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
   <header><h1>📚 La mia libreria</h1>
     <button class="acc" id="addart">📰 Articolo</button>
     <button class="acc" id="add">+ Aggiungi</button></header>
+  <div id="selbar">
+    <button id="sel-del" disabled>🗑 Elimina</button>
+    <div class="r2"><button id="sel-all">Seleziona tutto</button><button id="sel-cancel">Annulla</button></div>
+  </div>
   <div id="status"></div>
   <div id="list"></div>
   <input type="file" id="file" multiple style="display:none"
@@ -139,6 +159,9 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <h1 id="rtitle" class="t"></h1>
+    <button id="totop" class="ib" aria-label="Torna all'inizio del documento">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14M12 20V9M6 14l6-6 6 6"/></svg>
+    </button>
     <button id="pages" class="ib" aria-label="Pagine">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
     </button>
