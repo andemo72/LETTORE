@@ -346,6 +346,36 @@
   }
   var HEAD_END = /(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’]+\s+){1,8}pag\.?$/;
   var HEAD_IN = /(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’]+\s+){1,8}pag\.\s*\d{1,4}\b\s*/g;
+  function markNotes(list) {
+    var runs = [], cur = null, i, m, n;
+    for (i = 0; i < list.length; i++) {
+      m = /^\((\d{1,3})\)\s/.exec(list[i].t);
+      if (!m) continue;
+      n = +m[1];
+      if (n === 1) { cur = { starts: [{ n: 1, i: i }] }; runs.push(cur); }
+      else if (cur && n === cur.starts[cur.starts.length - 1].n + 1) cur.starts.push({ n: n, i: i });
+    }
+    runs = runs.filter(function (r) { return r.starts.length >= 2; });
+    var prevEnd = -1;
+    runs.forEach(function (r) {
+      var ss = r.starts, body = {}, k, j, q;
+      for (k = 0; k < ss.length; k++) {
+        var a = ss[k].i, b = k + 1 < ss.length ? Math.min(ss[k + 1].i, a + 8) : a + 3, parts = [];
+        for (j = a; j < b && j < list.length; j++) { parts.push(list[j].t); list[j].skip = true; }
+        body[ss[k].n] = parts.join(' ').replace(/^\(\d{1,3}\)\s*/, '').replace(/(\p{L})-\s+(\p{Ll})/gu, '$1$2');
+      }
+      for (q = prevEnd + 1; q < ss[0].i; q++) {
+        if (list[q].skip) continue;
+        var re = /\((\d{1,3})\)/g, mm, found = false;
+        while ((mm = re.exec(list[q].t))) {
+          found = true;
+          if (body[+mm[1]]) (list[q].nt = list[q].nt || []).push(body[+mm[1]]);
+        }
+        if (found) list[q].rm = true;
+      }
+      prevEnd = ss[ss.length - 1].i + 3;
+    });
+  }
   function markHeads(list) {
     for (var i = 0; i < list.length - 1; i++) {
       var t = list[i].t, nx = list[i + 1];
@@ -578,7 +608,7 @@
   function openBook(id) {
     Promise.all([dbGet('books', id), dbGet('texts', id)]).then(function (r) {
       book = r[0];
-      sents = splitSentences(r[1].text); markNoise(sents); markHeads(sents);
+      sents = splitSentences(r[1].text); markNoise(sents); markHeads(sents); markNotes(sents);
       if (book.marks && book.marks.length) {
         marks = book.marks.filter(function (m) { return m.i < sents.length; });
         mkind = book.kind || 'sez';
@@ -711,6 +741,9 @@
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
     t = t.replace(HEAD_IN, '');
+    if (sents[i].rm) t = t.replace(/\s*\(\d{1,3}\)/g, '');
+    t = t.replace(/([a-zà-ÿ]) ?\d{1,4}(?=[a-zà-ÿ])/g, '$1');
+    if (sents[i].nt) t += ' … Nota a piè di pagina: ' + sents[i].nt.join(' … Fine nota. … Nota a piè di pagina: ') + ' … Fine nota.';
     try { t = t.normalize('NFKC'); } catch (e) {}              // ligature (ﬁ, ﬂ) e simboli strani -> normali
     t = t.replace(/[­​-‍⁠﻿]/g, '');   // caratteri invisibili
     t = t.replace(/([\-_=*~#•·.])\1{2,}/g, ', ');              // *** --- ... diventano una pausa
@@ -1136,7 +1169,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v28): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v29): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
