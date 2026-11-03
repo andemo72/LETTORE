@@ -450,6 +450,20 @@
     saveTextBook(ttl, ttl + '.\n\n' + txt, '').then(artDone).catch(function (e) { artMsg(e.message, true); });
   };
 
+  // ---------- Condividi verso Lettore (Android) ----------
+  function readShare() {
+    var q = location.search;
+    if (!q || q.length < 2) return null;
+    var p = {}, parts = q.slice(1).split('&'), i, kv;
+    for (i = 0; i < parts.length; i++) {
+      kv = parts[i].split('=');
+      try { p[kv[0]] = decodeURIComponent((kv[1] || '').replace(/\+/g, ' ')); } catch (e) {}
+    }
+    if (!p.url && !p.text && !p.title) return null;
+    var m = /https?:\/\/[^\s<>"']+/i.exec((p.url || '') + ' ' + (p.text || '') + ' ' + (p.title || ''));
+    return { link: m ? m[0].replace(/[).,;]+$/, '') : '', text: p.text || '', title: p.title || '' };
+  }
+
   // ---------- Lettore ----------
   var book = null, sents = [], cur = 0, playing = false, gen = 0;
   var pageStart = -1, spans = [], curEl = null;
@@ -1004,7 +1018,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v22): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v23): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1312,7 +1326,18 @@
         logEv('CHIUSURA IMPROVVISA: ultima fase "' + (ph.t || '?') + '" a ' + (ph.at && ph.at >= +pl ? Math.round((ph.at - +pl) / 1000) + 's dall\'avvio' : 'tempo ignoto') + '; frasi pronte: ' + (ok ? ls.n : 0));
       }
     } catch (e) {}
-    try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
+    var sh = null;
+    try { sh = readShare(); } catch (e) {}
+    if (sh) {
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      try { localStorage.removeItem('lettore-open'); } catch (e) {}
+      artMsg('');
+      openSheet('sheet-art');
+      if (sh.link) { $('art-url').value = sh.link; setTimeout(function () { $('art-go').click(); }, 300); }
+      else { $('art-title').value = sh.title; $('art-text').value = sh.text; artMsg('Ho ricevuto del testo: controlla e tocca «Aggiungi il testo».'); }
+    } else {
+      try { var lo = localStorage.getItem('lettore-open'); if (lo) openBook(isNaN(+lo) ? lo : +lo); } catch (e) {}
+    }
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
   if ('serviceWorker' in navigator) {

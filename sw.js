@@ -1,6 +1,6 @@
 // Service worker: salva i file dell'app nel telefono per farla funzionare offline.
 // Strategia: prima prova la rete (così gli aggiornamenti arrivano da soli), se è offline usa la copia salvata.
-var CACHE = 'lettore-v22';
+var CACHE = 'lettore-v23';
 var FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
   'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
@@ -43,7 +43,8 @@ self.addEventListener('fetch', function (e) {
     fetch(e.request).then(function (resp) {
       // i grossi programmi delle voci neurali se li salva da solo il motore (nella memoria delle voci): qui non li copio
       var big = /\/lib\/piper\/(ort|piper_phonemize)/.test(e.request.url);
-      if (resp && resp.ok && !big) {
+      var shared = /[?&](url|text|title)=/.test(e.request.url);
+      if (resp && resp.ok && !big && !shared) {
         var copy = resp.clone();
         caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
       }
