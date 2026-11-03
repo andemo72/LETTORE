@@ -347,33 +347,56 @@
   var HEAD_END = /(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’]+\s+){1,8}pag\.?$/;
   var HEAD_IN = /(?:[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ'’]+\s+){1,8}pag\.\s*\d{1,4}\b\s*/g;
   function markNotes(list) {
-    var runs = [], cur = null, i, m, n;
+    var off = [], pos = 0, i, k, j, m, re;
+    for (i = 0; i < list.length; i++) { off.push(pos); pos += list[i].t.length + 1; }
+    var J = list.map(function (s) { return s.t; }).join(' ');
+    var occ = [];
     for (i = 0; i < list.length; i++) {
-      m = /^\((\d{1,3})\)\s/.exec(list[i].t);
-      if (!m) continue;
-      n = +m[1];
-      if (n === 1) { cur = { starts: [{ n: 1, i: i }] }; runs.push(cur); }
-      else if (cur && n === cur.starts[cur.starts.length - 1].n + 1) cur.starts.push({ n: n, i: i });
+      re = /\((\d{1,3})\)/g;
+      while ((m = re.exec(list[i].t))) occ.push({ n: +m[1], i: i, p: off[i] + m.index, e: off[i] + m.index + m[0].length });
     }
-    runs = runs.filter(function (r) { return r.starts.length >= 2; });
-    var prevEnd = -1;
-    runs.forEach(function (r) {
-      var ss = r.starts, body = {}, k, j, q;
-      for (k = 0; k < ss.length; k++) {
-        var a = ss[k].i, b = k + 1 < ss.length ? Math.min(ss[k + 1].i, a + 8) : a + 3, parts = [];
-        for (j = a; j < b && j < list.length; j++) { parts.push(list[j].t); list[j].skip = true; }
-        body[ss[k].n] = parts.join(' ').replace(/^\(\d{1,3}\)\s*/, '').replace(/(\p{L})-\s+(\p{Ll})/gu, '$1$2');
+    var runs = [], chain, last;
+    k = 0;
+    while (k < occ.length) {
+      if (occ[k].n !== 1) { k++; continue; }
+      chain = [occ[k]]; j = k + 1;
+      while (j < occ.length) {
+        last = chain[chain.length - 1];
+        if (occ[j].p - last.p > 600) break;
+        if (occ[j].n === last.n + 1) chain.push(occ[j]);
+        j++;
       }
-      for (q = prevEnd + 1; q < ss[0].i; q++) {
+      if (chain.length >= 3) { runs.push(chain); k = j; } else k++;
+    }
+    var prevEnd = -1;
+    runs.forEach(function (ch) {
+      var body = {}, t, q, mm, found, from, to, raw, before, endIdx = ch[0].i, a = ch[0].i;
+      var iL = ch[ch.length - 1].i, lastEnd = Math.min(list.length - 1, iL + 2);
+      for (t = 0; t < ch.length; t++) {
+        from = ch[t].e;
+        to = t + 1 < ch.length ? ch[t + 1].p : off[lastEnd] + list[lastEnd].t.length;
+        raw = J.substring(from, to).replace(/\s+[A-ZÀ-ÖØ-Þ]{3,}(?:\s+[A-ZÀ-ÖØ-Þ'’]{2,})+[\s\S]*$/, '');
+        if (t === ch.length - 1) {
+          raw = raw.slice(0, 900);
+          for (q = a; q < list.length && off[q] < from + raw.length; q++) endIdx = q;
+        }
+        body[ch[t].n] = raw.replace(/(\p{Ll})-(\p{Ll})/gu, '$1$2').replace(/\s+/g, ' ').trim();
+      }
+      before = list[a].t.substr(0, ch[0].p - off[a]).replace(/\s*NOTE\s*$/i, '').trim();
+      if (/[\p{L}\p{N}]/u.test(before)) list[a].x = before; else list[a].skip = true;
+      for (q = a + 1; q <= endIdx; q++) list[q].skip = true;
+      for (q = prevEnd + 1; q < a; q++) {
         if (list[q].skip) continue;
-        var re = /\((\d{1,3})\)/g, mm, found = false;
+        re = /\((\d{1,3})\)/g; found = false;
         while ((mm = re.exec(list[q].t))) {
-          found = true;
-          if (body[+mm[1]]) (list[q].nt = list[q].nt || []).push(body[+mm[1]]);
+          if (body.hasOwnProperty(+mm[1])) {
+            found = true;
+            if (body[+mm[1]]) (list[q].nt = list[q].nt || []).push(body[+mm[1]]);
+          }
         }
         if (found) list[q].rm = true;
       }
-      prevEnd = ss[ss.length - 1].i + 3;
+      prevEnd = endIdx;
     });
   }
   function markHeads(list) {
@@ -1169,7 +1192,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v29): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v30): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
