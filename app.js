@@ -249,6 +249,11 @@
       var pix = nodes.indexOf(best.parentNode);
       if (pix >= 0 && scores[pix] >= bestScore * 0.75) { best = best.parentNode; bestScore = scores[pix]; } else up = false;
     }
+    while (best.tagName === 'SECTION' && best.parentNode && best.parentNode.tagName !== 'BODY' && best.parentNode.tagName !== 'HTML') {
+      var kids = best.parentNode.children, ns = 0, q;
+      for (q = 0; q < kids.length; q++) if (kids[q].tagName === 'SECTION') ns++;
+      if (best.parentNode.tagName === 'SECTION' || ns >= 2) best = best.parentNode; else break;
+    }
     var out = [], seen = {}, els = best.querySelectorAll('p,h2,h3,h4,blockquote,li');
     for (j = 0; j < els.length; j++) {
       el = els[j];
@@ -999,7 +1004,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v21): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v22): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
