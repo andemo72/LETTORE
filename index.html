@@ -119,6 +119,10 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 .sheet button.acc{width:100%;padding:13px;border-radius:12px;font-size:16px;margin:6px 0}
 #art-msg{font-size:14px;min-height:18px;margin:2px 0 4px}
 #addart{margin-right:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#refresh.spin svg{animation:spin .8s linear infinite}
+#libtitle{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:400px){#v-lib>header{gap:4px;padding:10px 8px}#libtitle{font-size:20px}.lt{display:none}#v-lib>header button.acc{padding:9px 10px;font-size:14px}#refresh{width:38px;height:38px}}
 
 /* selezione multipla in libreria (v24) */
 .book{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -140,7 +144,10 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 <body>
 
 <div id="v-lib" class="view on">
-  <header><h1>📚 La mia libreria</h1>
+  <header><h1 id="libtitle">📚<span class="lt"> Libreria</span></h1>
+    <button class="ib" id="refresh" aria-label="Aggiorna l'app">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
+    </button>
     <button class="acc" id="addart">📰 Articolo</button>
     <button class="acc" id="add">+ Aggiungi</button></header>
   <div id="selbar">

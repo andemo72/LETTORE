@@ -1104,7 +1104,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v24): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v25): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1426,6 +1426,27 @@
     }
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
+  // ---------- Aggiorna l'app senza chiuderla (v25) ----------
+  $('refresh').onclick = function () {
+    var btn = this;
+    if (btn.classList.contains('spin')) return;
+    btn.classList.add('spin');
+    setStatus('Aggiornamento in corso…');
+    var files = ['./', 'index.html', 'app.js', 'sw.js', 'manifest.webmanifest'];
+    // cache:'reload' salta la copia temporanea del browser e scarica davvero la versione nuova
+    Promise.all(files.map(function (f) { return fetch(f, { cache: 'reload' }).then(function (r) { if (!r.ok) throw new Error('http'); }); }))
+      .then(function () {
+        if (!('serviceWorker' in navigator)) return;
+        return navigator.serviceWorker.getRegistration().then(function (reg) { return reg ? reg.update() : null; }).catch(function () {});
+      })
+      .then(function () { setTimeout(function () { location.reload(); }, 400); })
+      .catch(function () {
+        btn.classList.remove('spin');
+        setStatus('Impossibile aggiornare: controlla la connessione.');
+        setTimeout(function () { setStatus(''); }, 4000);
+      });
+  };
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').catch(function () {});
