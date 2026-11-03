@@ -762,7 +762,7 @@
   function stopKeep() { if (keepAu) { try { keepAu.pause(); } catch (e) {} } }
   function setMeta() {
     if ('mediaSession' in navigator && window.MediaMetadata) {
-      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'Lettore' }); } catch (e) {}
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'DEMOreader' }); } catch (e) {}
     }
   }
   // controllo "ci sei ancora?": con lo schermo spento (o in un'altra scheda) la lettura si ferma dopo 20 minuti
@@ -1104,7 +1104,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v25): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v26): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1198,7 +1198,7 @@
     pSink = sink;
     requestWake();
     if ('mediaSession' in navigator && window.MediaMetadata) {
-      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'Lettore' }); } catch (e) {}
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: book ? book.title : 'Lettura', artist: 'DEMOreader' }); } catch (e) {}
     }
     piperEnsure(voice.def).then(function (st) { return piperLoop(st, sink, g, i); })
       .catch(function (e) {
@@ -1302,6 +1302,7 @@
     else { $('text').classList.remove('locked'); $('v-read').classList.remove('tl'); }
     $('lock').checked = on;
     $('pos').disabled = on;
+    $('totop').disabled = on;
   }
   $('lock').onchange = function () { cfg.lockText = this.checked; saveCfg(); applyLock(); };
   applyLock();

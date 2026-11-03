@@ -1,7 +1,7 @@
 {
   "id": "./index.html",
-  "name": "Lettore",
-  "short_name": "Lettore",
+  "name": "DEMOreader",
+  "short_name": "DEMOreader",
   "lang": "it",
   "categories": ["books", "education"],
   "description": "Lettore vocale offline di libri e documenti",

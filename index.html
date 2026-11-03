@@ -6,12 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Lettore">
+<meta name="apple-mobile-web-app-title" content="DEMOreader">
 <meta name="theme-color" id="tc" content="#14161a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>if(/Android/i.test(navigator.userAgent))document.documentElement.className+=' android';</script>
-<title>Lettore</title>
+<title>DEMOreader</title>
 <style>
 :root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--accTxt:#1a1200;
   --hl:#3a3320;--curtxt:#ffffff;--line:#2a2e36;--bd:#343944;--ctrl:#1a1d22;}
@@ -27,7 +27,10 @@ button,input,select{touch-action:manipulation}
 #text{overscroll-behavior-y:contain}
 #text.locked{pointer-events:none;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .tl #rtitle::before{content:"🔒 "}
-#pos:disabled{pointer-events:none;opacity:.4}
+#pos:disabled,#totop:disabled{pointer-events:none;opacity:.4}
+@font-face{font-family:'DoHyeon';src:url(DoHyeon-Regular.ttf) format('truetype');font-display:swap}
+#libtitle .d{font-family:'DoHyeon',sans-serif;font-weight:normal}
+#libtitle .r{font-family:'American Typewriter',Georgia,serif;font-style:italic;font-weight:normal}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 .view{display:none;height:100%;flex-direction:column}
@@ -144,7 +147,7 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
 <body>
 
 <div id="v-lib" class="view on">
-  <header><h1 id="libtitle">📚<span class="lt"> Libreria</span></h1>
+  <header><h1 id="libtitle"><span class="d">DEMO</span><span class="r">reader</span></h1>
     <button class="ib" id="refresh" aria-label="Aggiorna l'app">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
     </button>
