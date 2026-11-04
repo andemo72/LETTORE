@@ -408,6 +408,7 @@
       }
     }
   }
+  var HEAD_START = /^\d{1,4}\s+(?:(?:[«»“”]|[A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9'’,\-]*)\s+){3,}(?:\([a-zà-ÿ ]+\)\s*)?/;
   var PAGENUM_RE = /^[\s\-–—·•\[(]*(?:pag(?:ina|\.)?|p\.|page)?\s*\d{1,4}\s*[\])\-–—·•]*$/i;
   function markNoise(list) {
     var cnt = {}, seen = {}, i, k;
@@ -782,6 +783,7 @@
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
     t = t.replace(HEAD_IN, '');
+    t = t.replace(HEAD_START, '');
     if (sents[i].rm) t = t.replace(/\s*\(\d{1,3}\)/g, '');
     t = t.replace(/([a-zà-ÿ]) ?\d{1,4}(?=[a-zà-ÿ])/g, '$1');
     var nl = notesFor(i); if (nl.length) t += ' … ' + nl.join(' … ');;
@@ -1222,7 +1224,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v37): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v38): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
