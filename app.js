@@ -760,13 +760,31 @@
     '←': ' arrow ', '•': ' ', '⁄': ' over ' };
   var SYM_RE = /[%&€$£@#+=<>\/\\*_^~|°§©®™×÷±≤≥≠∞→←•⁄]/g;
 
+  function noteDefer(i) {
+    var s = sents[i], nx = sents[i + 1];
+    if (!s || !s.nt || !nx) return false;
+    if (/[.!?…][»”"')\]]*\s*$/.test(s.t)) return false;
+    return /^\s*[«“"(]?\s*[a-zà-ÿ]/.test(nx.t);
+  }
+  function noteFmt(i) {
+    var s = sents[i];
+    if (!s || !s.nt) return [];
+    return s.nt.map(function (n, k) { var N = s.nn ? s.nn[k] : ''; return 'Nota ' + N + ' a piè di pagina: ' + n + ' … Fine nota ' + N + '.'; });
+  }
+  function notesFor(i) {
+    if (noteDefer(i)) return [];
+    var r = [], j = i;
+    while (j > 0 && noteDefer(j - 1)) j--;
+    for (; j <= i; j++) r = r.concat(noteFmt(j));
+    return r;
+  }
   function spokenText(i) {
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
     t = t.replace(HEAD_IN, '');
     if (sents[i].rm) t = t.replace(/\s*\(\d{1,3}\)/g, '');
     t = t.replace(/([a-zà-ÿ]) ?\d{1,4}(?=[a-zà-ÿ])/g, '$1');
-    if (sents[i].nt) t += ' … ' + sents[i].nt.map(function (n, k) { var N = sents[i].nn ? sents[i].nn[k] : ''; return 'Nota ' + N + ' a piè di pagina: ' + n + ' … Fine nota ' + N + '.'; }).join(' … ');
+    var nl = notesFor(i); if (nl.length) t += ' … ' + nl.join(' … ');;
     try { t = t.normalize('NFKC'); } catch (e) {}              // ligature (ﬁ, ﬂ) e simboli strani -> normali
     t = t.replace(/[­​-‍⁠﻿]/g, '');   // caratteri invisibili
     t = t.replace(/([\-_=*~#•·.])\1{2,}/g, ', ');              // *** --- ... diventano una pausa
@@ -1203,7 +1221,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v35): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v36): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
