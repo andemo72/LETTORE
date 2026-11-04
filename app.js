@@ -89,12 +89,12 @@
       function page(n) {
         if (n > pdf.numPages) return Promise.resolve(out);
         onProgress('PDF: pagina ' + n + ' di ' + pdf.numPages);
-        return pdf.getPage(n).then(function (p) { return p.getTextContent().then(function (tc) { tc.__h = p.getViewport({ scale: 1 }).height; return tc; }); })
+        return pdf.getPage(n).then(function (p) { return p.getTextContent().then(function (tc) { tc.__h = p.getViewport({ scale: 1 }).height; tc.__w = p.getViewport({ scale: 1 }).width; return tc; }); })
           .then(function (tc) {
             if (n <= 60) { window.__margini = window.__margini || []; tc.items.forEach(function (it) { if (it.transform && it.str.trim()) { var y = it.transform[5], h = tc.__h; if (/^\s*(\d{1,4}|[ivxlcIVXLC]{1,6})\s*$/.test(it.str) || y < h * 0.08) window.__margini.push(n + ' | x=' + Math.round(it.transform[4]) + ' y=' + Math.round(y) + ' h=' + Math.round(h) + ' | ' + JSON.stringify(it.str.slice(0, 40))); } }); }
             var s = '';
             for (var i = 0; i < tc.items.length; i++) {
-              var it = tc.items[i];
+              var it = tc.items[i]; if (it.transform && /^\s*\d{1,4}\s*$/.test(it.str) && it.transform[5] > tc.__h * 0.13 && it.transform[5] < tc.__h * 0.17 && it.transform[4] > tc.__w * 0.35 && it.transform[4] < tc.__w * 0.65) continue;
               s += it.str + (it.hasEOL ? (/[A-Za-zÀ-ÿ]-$/.test(it.str) ? '' : ' ') : '');
             }
             out.push({ label: 'Pagina ' + n, p: n, text: s.replace(/\s+/g, ' ').trim() });
@@ -1242,7 +1242,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v42): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v43): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
