@@ -796,6 +796,15 @@
     while (i < sents.length) { txt = spokenText(i); if (txt) break; i++; }
     if (i >= sents.length) return false;
     var idx = i;
+    var parts = txt.split(/[\s,]*(?=Nota a piè di pagina:)/);
+    txt = parts.pop();
+    parts.forEach(function (p) {
+      if (!p) return;
+      var q = new SpeechSynthesisUtterance(p);
+      if (voice) { q.voice = voice; q.lang = voice.lang; } else { q.lang = 'it-IT'; }
+      q.rate = cfg.rate; q.pitch = cfg.pitch;
+      utts.push(q); window.speechSynthesis.speak(q);
+    });
     var u = new SpeechSynthesisUtterance(txt);
     if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = 'it-IT'; }
     u.rate = cfg.rate; u.pitch = cfg.pitch;
@@ -1194,7 +1203,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v33): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v34): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
