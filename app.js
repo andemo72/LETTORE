@@ -91,7 +91,7 @@
         onProgress('PDF: pagina ' + n + ' di ' + pdf.numPages);
         return pdf.getPage(n).then(function (p) { return p.getTextContent().then(function (tc) { tc.__h = p.getViewport({ scale: 1 }).height; return tc; }); })
           .then(function (tc) {
-            if (n >= 20 && n <= 24) { window.__margini = window.__margini || []; tc.items.forEach(function (it) { if (it.transform && it.str.trim()) { var y = it.transform[5], h = tc.__h; if (y < h * 0.12 || y > h * 0.88) window.__margini.push(n + ' | x=' + Math.round(it.transform[4]) + ' y=' + Math.round(y) + ' h=' + Math.round(h) + ' | ' + JSON.stringify(it.str.slice(0, 40))); } }); }
+            if (n <= 60) { window.__margini = window.__margini || []; tc.items.forEach(function (it) { if (it.transform && it.str.trim()) { var y = it.transform[5], h = tc.__h; if (/^\s*(\d{1,4}|[ivxlcIVXLC]{1,6})\s*$/.test(it.str) || y < h * 0.08) window.__margini.push(n + ' | x=' + Math.round(it.transform[4]) + ' y=' + Math.round(y) + ' h=' + Math.round(h) + ' | ' + JSON.stringify(it.str.slice(0, 40))); } }); }
             var s = '';
             for (var i = 0; i < tc.items.length; i++) {
               var it = tc.items[i];
@@ -1242,7 +1242,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v41): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v42): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
