@@ -786,6 +786,8 @@
     return /[\p{L}\p{N}]/u.test(t) ? t : '';   // frasi di soli simboli muti: saltate
   }
 
+  window.__spoken = spokenText;
+
   // ---- Lettura fluida: la frase successiva è già in coda prima che finisca la corrente ----
   var finalIdx = -1, lastQ = -1, utts = [];
 
@@ -1192,7 +1194,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v32): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v33): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
