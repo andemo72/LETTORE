@@ -884,12 +884,28 @@
     }
     return false;
   }
+  /* v49: indice con titoli in una frase + serie di «numero pag.» */
+  var IDX2_RUN_RE = /pag\.\s*$|^\d{1,4}\s*$/;
+  function idxRunEnd(k) {
+    var q = k + 1;
+    while (sents[q] && !sents[q].br && q < k + 60 && IDX2_RUN_RE.test(sents[q].t.trim())) q++;
+    return q - 1;
+  }
+  function inIdx2(i) {
+    for (var k = i; k >= 0 && k > i - 60; k--) {
+      if (sents[k].br && IDX_TITLE_RE.test(sents[k].t.toLowerCase().replace(/\s+/g, '')) && idxRunEnd(k) - k >= 5) {
+        return i <= idxRunEnd(k);
+      }
+    }
+    return false;
+  }
   function spokenText(i) {
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
     if (isIdx(i) && (isIdx(i - 1) || isIdx(i + 1))) return '';
     if (IDX_HEAD_RE.test(sents[i].t.trim()) && isIdx(i + 1)) return '';
     if (inIdx(i)) return '';   /* v47 */
+    if (inIdx2(i)) return '';  /* v49 */
     t = t.replace(HEAD_IN, '');
     if (sents[i].br && book && book.kind === 'pdf') {
       /* v44: numero pagina tolto in readPdf */
@@ -1335,7 +1351,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v48): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v49): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
