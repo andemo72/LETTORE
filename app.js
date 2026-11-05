@@ -478,6 +478,7 @@
   var HEAD_START = /^\d{1,4}\s+(?:(?:[«»“”]|[A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9'’,\-]*)\s+){3,}(?:\([a-zà-ÿ ]+\)\s*)?/;
   var PAGENUM_RE = /^[\s\-–—·•\[(]*(?:pag(?:ina|\.)?|p\.|page)?\s*\d{1,4}\s*[\])\-–—·•]*$/i;
   var ORE_RE = /^ore\s+\d{1,2}[:.]\d{2}\b/i;  /* v50: orari = testo vero */
+  var FIRMA_RE = /^(?:[^,\d]{1,40},\s*\d{1,2}\s+\p{L}+\s+\d{4}.{0,20}|Giorgio Bongiovanni\s*)$/u;  /* v51: firme = testo vero */
   function markNoise(list) {
     var cnt = {}, seen = {}, i, k;
     function key(t) { return t.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim(); }
@@ -488,7 +489,7 @@
     }
     for (i = 0; i < list.length; i++) {
       k = key(list[i].t);
-      if (cnt[k] >= 3 && !ORE_RE.test(list[i].t.trim())) { if (seen[k]) list[i].skip = true; else seen[k] = 1; }
+      if (cnt[k] >= 3 && !ORE_RE.test(list[i].t.trim()) && !FIRMA_RE.test(list[i].t.trim())) { if (seen[k]) list[i].skip = true; else seen[k] = 1; }
     }
   }
   function chunkLong(s) {
@@ -1352,7 +1353,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v50): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v51): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
