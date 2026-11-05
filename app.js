@@ -91,7 +91,7 @@
     return null;
   }
   function buildPdf(raw) {
-    var N = raw.length, r, k, j, q, g, A = 0, groups = [], zones = [];
+    var N = raw.length, r, k, j, q, g, A = 0, groups = [], zones = []; window.__hy = raw; /* v51e diagnostica */
     for (r = 0; r < N; r++) {
       for (k = 0; k < raw[r].it.length; k++) {
         q = raw[r].it[k];
@@ -1358,7 +1358,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v51d): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v51e): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
