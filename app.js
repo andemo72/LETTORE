@@ -861,11 +861,33 @@
   var IDX_RE = /^\d{1,4}\s+.{1,120}\s+pag\.\s*$/;
   var IDX_HEAD_RE = /^Indice\b.{0,120}\spag\.\s*$/;
   function isIdx(j) { return !!sents[j] && IDX_RE.test(sents[j].t); }
+  var IDX_TITLE_RE = /^(indicegenerale|indice|sommario|contenuti|contents|tableofcontents)/;
+  function idxTitle(j) {
+    var s = sents[j];
+    if (!s) return false;
+    if (!IDX_TITLE_RE.test(s.t.toLowerCase().replace(/\s+/g, ''))) return false;
+    var m = s.t.match(/\b\d{1,3}\b/g) || [];
+    if (m.length < 3) return false;
+    for (var q = 1; q < m.length; q++) if (+m[q] < +m[q - 1]) return false;
+    return true;
+  }
+  function inIdx(i) {
+    for (var k = i; k >= 0 && k > i - 40; k--) {
+      if (idxTitle(k)) {
+        for (var q = k + 1; q <= i; q++) {
+          if (sents[q].br || !/\b\d{1,3}\b/.test(sents[q].t)) return false;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
   function spokenText(i) {
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
     if (isIdx(i) && (isIdx(i - 1) || isIdx(i + 1))) return '';
     if (IDX_HEAD_RE.test(sents[i].t.trim()) && isIdx(i + 1)) return '';
+    if (inIdx(i)) return '';   /* v47 */
     t = t.replace(HEAD_IN, '');
     if (sents[i].br && book && book.kind === 'pdf') {
       /* v44: numero pagina tolto in readPdf */
@@ -1311,7 +1333,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v46): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v47): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
