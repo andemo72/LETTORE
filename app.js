@@ -481,7 +481,7 @@
   var FIRMA_RE = /^(?:[^,\d]{1,40},\s*\d{1,2}\s+\p{L}+\s+\d{4}.{0,20}|Giorgio Bongiovanni\s*)$/u;  /* v51: firme = testo vero */
   function markNoise(list) {
     var cnt = {}, seen = {}, i, k;
-    function key(t) { return t.toLowerCase().replace(/\d+/g, '#').replace(/\s+/g, ' ').trim(); }
+    function key(t) { var l = t.toLowerCase(); if (/^(capitolo|messaggio|parte|lettera|cap\.)/.test(l)) return l.replace(/\s+/g, ' ').trim(); return l.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim(); }
     for (i = 0; i < list.length; i++) {
       var t = list[i].t;
       if (t.length > 90 || /[.!?…]["'»”’)\]]*$/.test(t)) continue;
@@ -1361,7 +1361,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v53): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v54): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
