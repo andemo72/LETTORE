@@ -941,6 +941,11 @@
   // ---- Lettura fluida: la frase successiva è già in coda prima che finisca la corrente ----
   var finalIdx = -1, lastQ = -1, utts = [];
 
+  var SIGN_RE = /^(?:Giorgio Bongiovanni(?:\s+Porto\b.*)?\s*$|[^,\d]{1,40},\s*\d{1,2}\s+\p{L}+\s+\d{4})/u;  /* v51b: pausa prima della firma */
+  function isSign(n) {
+    if (n < 1 || !sents[n] || !sents[n - 1]) return false;
+    return SIGN_RE.test(sents[n].t.trim()) && sents[n].t.length <= 90 && !SIGN_RE.test(sents[n - 1].t.trim());
+  }
   function enqueue(i, g) {
     var txt = '';
     while (i < sents.length) { txt = spokenText(i); if (txt) break; i++; }
@@ -964,7 +969,7 @@
       show(idx);
       var nx = idx + 1;
       // a fine paragrafo non metto in coda la frase dopo: lascio una piccola pausa, come un lettore umano
-      if (nx < sents.length && sents[nx].br && cfg.pauseMs > 0) return;
+      if (nx < sents.length && (sents[nx].br || isSign(nx)) && cfg.pauseMs > 0) return;
       if (!enqueue(nx, g)) finalIdx = idx;
     };
     u.onend = function () {
@@ -973,7 +978,7 @@
       if (lastQ > idx) return;
       var nx = idx + 1;
       function go() { if (g === gen && playing && !enqueue(nx, g)) pause(); }
-      if (nx < sents.length && sents[nx].br && cfg.pauseMs > 0) setTimeout(go, cfg.pauseMs); else go();
+      if (nx < sents.length && (sents[nx].br || isSign(nx)) && cfg.pauseMs > 0) setTimeout(go, cfg.pauseMs); else go();
     };
     u.onerror = function (e) {
       if (g !== gen) return;
@@ -1353,7 +1358,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v51): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v51b): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
