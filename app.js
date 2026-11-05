@@ -908,6 +908,9 @@
     if (IDX_HEAD_RE.test(sents[i].t.trim()) && isIdx(i + 1)) return '';
     if (inIdx(i)) return '';   /* v47 */
     if (inIdx2(i)) return '';  /* v49 */
+    /* v52: frontespizio PDF, solo prime frasi */
+    if (book && book.kind === 'pdf' && i < 8 && (sents[i].t.trim() === 'C.' || /©|copyright|Giordano Bruno|Via Molino|Sant.Elpidio|\bTel\b|\bFax\b/i.test(sents[i].t))) return '';
+    if (i === 0) t = t.replace(/\s*Edizioni\s+A\.?\s*$/i, '');
     t = t.replace(HEAD_IN, '');
     if (sents[i].br && book && book.kind === 'pdf') {
       /* v44: numero pagina tolto in readPdf */
@@ -1358,7 +1361,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v51g): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v52): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
