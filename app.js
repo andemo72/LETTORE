@@ -80,6 +80,73 @@
     }).then(function (r) { return r.value; });
   }
 
+  function romanVal(t) { var m = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }, s = t.toLowerCase(), tot = 0, i, a, b; for (i = 0; i < s.length; i++) { a = m[s.charAt(i)]; b = m[s.charAt(i + 1)] || 0; tot += a < b ? -a : a; } return tot > 0 ? tot : null; }
+  function pgVal(str) {
+    var t = str.replace(/^\s+|\s+$/g, ''), m;
+    if ((m = /^(\d{1,4})$/.exec(t))) return parseInt(m[1], 10);
+    if ((m = /^(?:pag\.?|pagina|p\.)\s*(\d{1,4})$/i.exec(t))) return parseInt(m[1], 10);
+    if ((m = /^[-\u2013\u2014]\s*(\d{1,4})\s*[-\u2013\u2014]$/.exec(t))) return parseInt(m[1], 10);
+    if ((m = /^(\d{1,4})\s*\/\s*\d{1,4}$/.exec(t))) return parseInt(m[1], 10);
+    if (/^([ivxlcdm]{1,7}|[IVXLCDM]{1,7})$/.test(t)) return romanVal(t);
+    return null;
+  }
+  function buildPdf(raw) {
+    var N = raw.length, r, k, j, q, g, A = 0, groups = [], zones = [];
+    for (r = 0; r < N; r++) {
+      for (k = 0; k < raw[r].it.length; k++) {
+        q = raw[r].it[k];
+        if (q.x === null || !raw[r].w || !raw[r].h) continue;
+        var v = pgVal(q.s);
+        if (v === null) continue;
+        q.v = v; q.fx = q.x / raw[r].w; q.fy = q.y / raw[r].h; q.c = true;
+      }
+    }
+    for (r = 0; r < N; r++) {
+      if (raw[r].n < 3 || raw[r].n > 32) continue;
+      A++;
+      for (k = 0; k < raw[r].it.length; k++) {
+        q = raw[r].it[k];
+        if (!q.c) continue;
+        g = null;
+        for (j = 0; j < groups.length; j++) { if (Math.abs(groups[j].fx - q.fx) <= 0.03 && Math.abs(groups[j].fy - q.fy) <= 0.02) { g = groups[j]; break; } }
+        if (!g) { g = { fx: q.fx, fy: q.fy, m: [] }; groups.push(g); }
+        g.m.push({ n: raw[r].n, v: q.v });
+      }
+    }
+    if (A >= 3) {
+      groups.forEach(function (g) {
+        var pc = {}, D = 0, multi = 0, offs = {}, best = 0, bestOff = 0, par = null, same = true, exp = 0, i, key;
+        g.m.forEach(function (e) {
+          if (!pc[e.n]) { pc[e.n] = 0; D++; }
+          pc[e.n]++;
+          key = e.v - e.n; offs[key] = (offs[key] || 0) + 1;
+          if (par === null) par = e.n % 2; else if (par !== e.n % 2) same = false;
+        });
+        for (key in pc) { if (pc[key] > 1) multi++; }
+        for (key in offs) { if (offs[key] > best) { best = offs[key]; bestOff = parseInt(key, 10); } }
+        if (same) { for (i = 0; i < N; i++) { if (raw[i].n >= 3 && raw[i].n <= 32 && raw[i].n % 2 === par) exp++; } } else exp = A;
+        if (D >= 3 && D >= 0.6 * exp && multi <= 0.1 * D && best >= 0.8 * g.m.length) { g.d = D; g.off = bestOff; zones.push(g); }
+      });
+      zones.sort(function (a, b) { return b.d - a.d; });
+      zones = zones.slice(0, 2);
+    }
+    window.__zone = zones.map(function (z) { return 'x=' + Math.round(z.fx * 100) + '% y=' + Math.round(z.fy * 100) + '% pagine=' + z.d + ' offset=' + z.off; });
+    var out = [];
+    for (r = 0; r < N; r++) {
+      var s = '';
+      for (k = 0; k < raw[r].it.length; k++) {
+        q = raw[r].it[k];
+        if (q.c) {
+          var inz = false;
+          for (j = 0; j < zones.length; j++) { if (Math.abs(zones[j].fx - q.fx) <= 0.03 && Math.abs(zones[j].fy - q.fy) <= 0.02) { inz = true; break; } }
+          if (inz) continue;
+        }
+        s += q.s + (q.e ? (/[A-Za-z\u00C0-\u00FF]-$/.test(q.s) ? '' : ' ') : '');
+      }
+      out.push({ label: 'Pagina ' + raw[r].n, p: raw[r].n, text: s.replace(/\s+/g, ' ').trim() });
+    }
+    return out;
+  }
   function readPdf(file, onProgress) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
     return file.arrayBuffer().then(function (buf) {
@@ -87,17 +154,14 @@
     }).then(function (pdf) {
       var out = [];
       function page(n) {
-        if (n > pdf.numPages) return Promise.resolve(out);
+        if (n > pdf.numPages) return Promise.resolve(buildPdf(pdf.__raw || []));
         onProgress('PDF: pagina ' + n + ' di ' + pdf.numPages);
         return pdf.getPage(n).then(function (p) { return p.getTextContent().then(function (tc) { tc.__h = p.getViewport({ scale: 1 }).height; tc.__w = p.getViewport({ scale: 1 }).width; return tc; }); })
           .then(function (tc) {
             if (n <= 60) { window.__margini = window.__margini || []; tc.items.forEach(function (it) { if (it.transform && it.str.trim()) { var y = it.transform[5], h = tc.__h; if (/^\s*(\d{1,4}|[ivxlcIVXLC]{1,6})\s*$/.test(it.str) || y < h * 0.08) window.__margini.push(n + ' | x=' + Math.round(it.transform[4]) + ' y=' + Math.round(y) + ' h=' + Math.round(h) + ' | ' + JSON.stringify(it.str.slice(0, 40))); } }); }
-            var s = '';
-            for (var i = 0; i < tc.items.length; i++) {
-              var it = tc.items[i]; if (it.transform && /^\s*\d{1,4}\s*$/.test(it.str) && it.transform[5] > tc.__h * 0.13 && it.transform[5] < tc.__h * 0.17 && it.transform[4] > tc.__w * 0.35 && it.transform[4] < tc.__w * 0.65) continue;
-              s += it.str + (it.hasEOL ? (/[A-Za-zÀ-ÿ]-$/.test(it.str) ? '' : ' ') : '');
-            }
-            out.push({ label: 'Pagina ' + n, p: n, text: s.replace(/\s+/g, ' ').trim() });
+            var rw = [];
+            for (var i = 0; i < tc.items.length; i++) { var it = tc.items[i]; rw.push({ s: it.str, e: it.hasEOL, x: it.transform ? it.transform[4] : null, y: it.transform ? it.transform[5] : null }); }
+            (pdf.__raw = pdf.__raw || []).push({ n: n, h: tc.__h, w: tc.__w, it: rw });
             return page(n + 1);
           });
       }
@@ -1247,7 +1311,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v45): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v46): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
