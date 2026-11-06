@@ -719,6 +719,8 @@
       $('rtitle').textContent = book.title;
       $('pos').max = Math.max(0, sents.length - 1);
       pageStart = -1;
+      window.__marks = marks;
+      if (mkind === 'pdf') { var mi = 0; for (var kk = 0; kk < sents.length; kk++) { while (mi + 1 < marks.length && marks[mi + 1].i <= kk) mi++; sents[kk].pg = marks[mi] ? marks[mi].p : 0; } }
       try { localStorage.setItem('lettore-open', String(id)); } catch (e) {}
       showView('v-read');
       if (!histPushed) { try { history.pushState({ r: 1 }, ''); histPushed = true; } catch (e) {} }
@@ -1432,7 +1434,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v61): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v62): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
