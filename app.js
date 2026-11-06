@@ -947,10 +947,12 @@
   var RIGHTS58 = /riservati tutti i diritti|[Dd]iritti riservati|Tutti i diritti/;
   function colo58(i) {   /* v58: blocco colophon a contesto */
     if (_coS !== sents || _coN !== sents.length) {
-      var lim = frontEnd(), open = false, j, t, m, w;
+      var lim = frontEnd(), open = false, j, t, m, w, pc63 = {};
+      for (j = 0; j < sents.length; j++) { t = sents[j].t; if (pc63[sents[j].pg] === undefined) pc63[sents[j].pg] = 0; if (STRONG58.test(t) || RIGHTS58.test(t)) pc63[sents[j].pg]++; }
       _coM = [];
       for (j = 0; j < lim; j++) {
         t = sents[j].t.trim(); _coM[j] = false;
+        if (pc63[sents[j].pg] === 0) { open = false; continue; }  /* v63 */
         if (/^[“«"‘]/.test(t)) { open = false; continue; }
         if (RIGHTS58.test(t)) { _coM[j] = true; open = true; continue; }
         m = STRONG58.exec(t);
@@ -1434,7 +1436,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v62): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v63): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
