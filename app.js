@@ -901,6 +901,28 @@
     }
     return false;
   }
+  /* v55: testatina ripetuta (stessa apertura >=3 volte) muta dalla 3a comparsa */
+  var _repS = null, _repN = -1, _repOcc = [], _repK = [], _repKey = [];
+  function repBuild() {
+    var seen = {}, i, t, re = /\S+/g, m, key, k;
+    _repS = sents; _repN = sents.length; _repOcc = []; _repK = []; _repKey = [];
+    for (i = 0; i < sents.length; i++) {
+      t = sents[i].t || ''; re.lastIndex = 0; key = '';
+      for (k = 0; k < 6 && key.length < 12 && (m = re.exec(t)); k++) key += docKey(m[0]);
+      _repOcc[i] = 0;
+      if (key.length < 12) continue;
+      seen[key] = (seen[key] || 0) + 1;
+      _repOcc[i] = seen[key]; _repK[i] = k; _repKey[i] = key;
+    }
+  }
+  function repStrip(i, t) {
+    if (_repS !== sents || _repN !== sents.length) repBuild();
+    if (!(_repOcc[i] >= 3)) return t;
+    var re = /\S+/g, key = '', m, k, end = 0;
+    for (k = 0; k < _repK[i] && (m = re.exec(t)); k++) { key += docKey(m[0]); end = re.lastIndex; }
+    if (k < _repK[i] || key !== _repKey[i]) return t;
+    return t.slice(end).replace(/^[\s.,;:\-–—]+/, '');
+  }
   function spokenText(i) {
     var t = sents[i].x !== undefined ? sents[i].x : sents[i].t;
     if (sents[i].skip || PAGENUM_RE.test(t)) return '';
@@ -912,6 +934,7 @@
     if (book && book.kind === 'pdf' && i < 8 && (sents[i].t.trim() === 'C.' || /©|copyright|Giordano Bruno|Via Molino|Sant.Elpidio|\bTel\b|\bFax\b/i.test(sents[i].t))) return '';
     if (i === 0) t = t.replace(/\s*Edizioni\s+A\.?\s*$/i, '');
     t = t.replace(HEAD_IN, '');
+    t = repStrip(i, t);  /* v55 */
     if (sents[i].br && book && book.kind === 'pdf') {
       /* v44: numero pagina tolto in readPdf */
       if (i !== 0) t = stripDocTitle(t);
@@ -1361,7 +1384,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v54): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v55): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
