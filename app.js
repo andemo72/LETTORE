@@ -941,8 +941,14 @@
     if (IDX_HEAD_RE.test(sents[i].t.trim()) && isIdx(i + 1)) return '';
     if (inIdx(i)) return '';   /* v47 */
     if (inIdx2(i)) return '';  /* v49 */
+    /* v57: taglia solo il pezzo copyright/editore/indirizzo */
+    var cut57 = false;
+    if (book && book.kind === 'pdf' && i < frontEnd()) {
+      var m57 = /Direzione:|Copyright by|Edito da|Herausgegeben von|\bTel\.|ISBN|https?:|©|\bVia\s+[A-Z]|\b\d{5}\s+[A-Z][a-zà-ÿ]+|\bStr\./.exec(t);
+      if (m57 && m57.index > 0) { t = t.slice(0, m57.index).replace(/[\s,;:–-]+$/, ""); cut57 = true; }
+    }
     /* v52: frontespizio PDF, solo prime frasi */
-    if (book && book.kind === 'pdf' && i < frontEnd() && (sents[i].t.trim() === 'C.' || /©|copyright|ISBN|diritti riservati|https?:|www\.|Giordano Bruno|Via Molino|Sant.Elpidio|\bTel\b|\bFax\b/i.test(sents[i].t) || /\bVia\s+[A-Z]/.test(sents[i].t))) return '';  /* v56 */
+    if (book && book.kind === 'pdf' && i < frontEnd() && !cut57 && (sents[i].t.trim() === 'C.' || /©|copyright|ISBN|diritti riservati|https?:|www\.|Giordano Bruno|Via Molino|Sant.Elpidio|\bTel\b|\bFax\b/i.test(sents[i].t) || /\bVia\s+[A-Z]/.test(sents[i].t))) return '';  /* v56 */
     if (i === 0) t = t.replace(/\s*Edizioni\s+A\.?\s*$/i, '');
     t = t.replace(HEAD_IN, '');
     t = repStrip(i, t);  /* v55 */
@@ -1395,7 +1401,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v56): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v57): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
