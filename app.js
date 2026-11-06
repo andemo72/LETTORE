@@ -131,11 +131,17 @@
       zones = zones.slice(0, 2);
     }
     window.__zone = zones.map(function (z) { return 'x=' + Math.round(z.fx * 100) + '% y=' + Math.round(z.fy * 100) + '% pagine=' + z.d + ' offset=' + z.off; });
+    var g59 = [], thr59 = 24, a59, b59, y59, d59;
+    for (a59 = 0; a59 < N; a59++) { y59 = []; for (b59 = 0; b59 < raw[a59].it.length; b59++) { if (raw[a59].it[b59].e && raw[a59].it[b59].y !== null) y59.push(raw[a59].it[b59].y); } for (b59 = 1; b59 < y59.length; b59++) { d59 = Math.abs(y59[b59 - 1] - y59[b59]); if (d59 > 3 && d59 < 200) g59.push(d59); } }
+    if (g59.length > 50) { g59.sort(function (a, b) { return a - b; }); thr59 = 1.7 * g59[Math.floor(g59.length / 2)]; }
     var out = [];
     for (r = 0; r < N; r++) {
       var s = '';
+      var ls59 = true, ly59 = null; /* v59 salto verticale */
       for (k = 0; k < raw[r].it.length; k++) {
         q = raw[r].it[k];
+        if (ls59 && q.y !== null) { if (ly59 !== null && Math.abs(q.y - ly59) > thr59) s += '\u0002'; ly59 = q.y; ls59 = false; }
+        if (q.e) ls59 = true;
         if (q.c) {
           var inz = false;
           for (j = 0; j < zones.length; j++) { if (Math.abs(zones[j].fx - q.fx) <= 0.03 && Math.abs(zones[j].fy - q.fy) <= 0.02) { inz = true; break; } }
@@ -145,7 +151,7 @@
         if (pv && !pv.e && /^(ffi|ffl|ff|fi|fl)$/.test(pv.s) && /^\s/.test(tx) && Math.abs((q.y || 0) - (pv.y || 0)) < 2) tx = tx.replace(/^\s+/, ''); /* v48 ligature */
         s += tx + (q.e ? ((/[A-Za-z\u00C0-\u00FF]-\s*$/.test(q.s) || (/^\s*-\s*$/.test(q.s) && /[A-Za-z\u00C0-\u00FF]$/.test(s.replace(/\s+$/, ''))) || (q.s === '' && /[A-Za-z\u00C0-\u00FF]-$/.test(s))) ? '\u0001' : ' ') : '');
       }
-      out.push({ label: 'Pagina ' + raw[r].n, p: raw[r].n, text: s.replace(/\s*-\s*\u0001\s*(?=[a-z\u00E0-\u00FF])/g, '').replace(/\u0001/g, '').replace(/\s+/g, ' ').trim() });
+      out.push({ label: 'Pagina ' + raw[r].n, p: raw[r].n, text: s.replace(/\s*-\s*\u0001\s*(?=[a-z\u00E0-\u00FF])/g, '').replace(/\u0001/g, '').replace(/\s+/g, ' ').replace(/ ?\u0002 ?/g, '\n').trim() });
     }
     return out;
   }
@@ -1425,7 +1431,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v58): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v59): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
