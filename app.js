@@ -482,7 +482,7 @@
     }
   }
   var HEAD_START = /^\d{1,4}\s+(?:(?:[«»“”]|[A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9'’,\-]*)\s+){3,}(?:\([a-zà-ÿ ]+\)\s*)?/;
-  var PAGENUM_RE = /^[\s\-–—·•\[(]*(?:pag(?:ina|\.)?|p\.|page)?\s*\d{1,4}\s*[\])\-–—·•]*$/i;
+  var PAGENUM_RE = /^[\s\-–—·•\[(]*(?:(?:[Pp][Aa][Gg](?:[Ii][Nn][Aa]|\.)?|[Pp]\.|[Pp][Aa][Gg][Ee])\s*)?(?:\d{1,6}(?:\s*(?:\/|[Dd][Ii]|[Oo][Ff])\s*\d{1,6})?|(?=[IVXLC]{2,}\s*[\])\-–—·•]*$)C{0,3}(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3}))\s*[\])\-–—·•]*$/; /* v64 */
   var ORE_RE = /^ore\s+\d{1,2}[:.]\d{2}\b/i;  /* v50: orari = testo vero */
   var FIRMA_RE = /^(?:[^,\d]{1,40},\s*\d{1,2}\s+\p{L}+\s+\d{4}.{0,20}|Giorgio Bongiovanni\s*)$/u;  /* v51: firme = testo vero */
   function markNoise(list) {
@@ -1436,7 +1436,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v63): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v64): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
