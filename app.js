@@ -1438,7 +1438,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v66b): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v66c): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1721,6 +1721,7 @@
         var spoke = lastSpeechAt > hiddenAt ? Math.round((lastSpeechAt - hiddenAt) / 1000) + 's' : 'mai';
         logEv('riacceso dopo ' + tot + 's; app attiva ~' + alive + 's; ultima frase a ' + spoke);
         hiddenAt = 0;
+        if (playing && tot > 2) { setTimeout(function () { if (playing && document.visibilityState === 'visible') { logEv('riavvio lettura (v66c)'); speak(cur); } }, 400); }
       }
       clearAway();
       if (playing) requestWake();
