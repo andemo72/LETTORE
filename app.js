@@ -1000,6 +1000,7 @@
     t = t.replace(/(^|[^A-Za-zÀ-ÿ])((?:[A-ZÀ-ÖØ-Þ] ){3,}[A-ZÀ-ÖØ-Þ])(?![A-Za-zÀ-ÿ])/g, function (m, a, b) { return a + b.replace(/ /g, ''); });   // v65: lettere spaziate (4+) unite
     // PAROLE IN STAMPATELLO: in minuscolo, altrimenti la voce le sillaba lettera per lettera
     t = t.replace(/(^|[^A-Za-zÀ-ÿ])([A-ZÀ-ÖØ-Þ]{4,})(?![A-Za-zÀ-ÿ])/g, function (m, a, b) { return a + b.toLowerCase(); });
+    t = t.replace(/[A-Za-zÀ-ÿ]+/g, function (m) { return (m.length > 1 && /[a-zà-ÿ]/.test(m) && /[A-ZÀ-ÖØ-Þ]/.test(m.slice(1))) ? m.toLowerCase() : m; });   // v71
     if (cfg.symbols) {
       t = t.replace(/(\d)°(?=\s+[a-zà-ÿ])/g, '$1');
       var lang = (voice && voice.lang ? voice.lang : 'it').toLowerCase().substring(0, 2);
@@ -1438,7 +1439,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v66c): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v66d): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
