@@ -926,6 +926,7 @@
   function repStrip(i, t) {
     if (_repS !== sents || _repN !== sents.length) repBuild();
     if (!(_repOcc[i] >= 3)) return t;
+    if (i > 0 && sents[i].pg === sents[i - 1].pg) return t; /* v72 */
     var re = /\S+/g, key = '', m, k, end = 0;
     for (k = 0; k < _repK[i] && (m = re.exec(t)); k++) { key += docKey(m[0]); end = re.lastIndex; }
     if (k < _repK[i] || key !== _repKey[i]) return t;
@@ -1439,7 +1440,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v66d): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v66e): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
