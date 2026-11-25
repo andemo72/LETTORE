@@ -1090,7 +1090,7 @@
     return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   }
   function startKeep() {
-    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return; /* v66b prova iOS */
+    /* v66h: silenzio in loop riattivato su iPhone */
     try {
       if (!keepAu) { keepAu = new Audio(makeSilentUrl()); keepAu.loop = true; }
       var pr = keepAu.play(); if (pr && pr.catch) pr.catch(function () {});
@@ -1441,7 +1441,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v66g): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v66h): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
