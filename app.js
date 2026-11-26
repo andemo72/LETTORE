@@ -231,6 +231,15 @@
     var p;
     function one(t) { return [{ label: '', p: 0, text: t }]; }
     setStatus('Leggo: ' + name + ' …');
+    if (ext === 'mp3') { /* v80 */
+      var mid = 'b' + Date.now() + Math.floor(Math.random() * 1000);
+      return file.arrayBuffer().then(function (buf) {
+        return dbPut('texts', { id: mid, blob: new Blob([buf], { type: 'audio/mpeg' }) });
+      }).then(function () {
+        return dbPut('books', { id: mid, title: title, pos: 0, total: 0, kind: 'mp3',
+          marks: [], added: Date.now(), last: Date.now() });
+      });
+    }
     if (ext === 'pdf') { kind = 'pdf'; p = readPdf(file, setStatus); }
     else if (ext === 'docx') p = readDocx(file).then(one);
     else if (ext === 'epub') { kind = 'epub'; p = readEpub(file, function (t) { title = t; }); }
@@ -755,7 +764,7 @@
         var t = document.createElement('div');
         t.className = 't';
         var bt = document.createElement('b'); bt.textContent = b.title;
-        var sm = document.createElement('small'); sm.textContent = pct + '% letto' + (b.folder ? ' \u00B7 \uD83D\uDCDA ' + b.folder : '');
+        var sm = document.createElement('small'); sm.textContent = (b.kind === 'mp3' ? '\uD83C\uDFB5 Audio MP3' : pct + '% letto') + (b.folder ? ' \u00B7 \uD83D\uDCDA ' + b.folder : '');
         var bar = document.createElement('div'); bar.className = 'bar';
         bar.innerHTML = '<i style="width:' + pct + '%"></i>';
         t.appendChild(bt); t.appendChild(sm); t.appendChild(bar);
@@ -905,6 +914,7 @@
 
   function openBook(id) {
     Promise.all([dbGet('books', id), dbGet('texts', id)]).then(function (r) {
+      if (r[0] && r[0].kind === 'mp3') { alert('File MP3 salvato. Il lettore audio arriva nella prossima versione.'); return; } /* v80 */
       book = r[0];
       sents = splitSentences(r[1].text); markNoise(sents); markHeads(sents); markNotes(sents); window.__sents = sents;
       if (book.marks && book.marks.length) {
@@ -1641,7 +1651,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v79): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v80): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
