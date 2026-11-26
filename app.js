@@ -661,7 +661,7 @@
       box.innerHTML = '';
       rows = {};
       if (!books.length) {
-        box.innerHTML = '<div class="empty"><b>Nessun libro ancora.</b><br>Tocca <b>+ Aggiungi</b> per caricare un PDF, EPUB, Word o TXT dall\'app File del tuo iPhone.</div>';
+        box.innerHTML = (curPage === undefined || curPage === 'In lettura') ? '<div class="empty"><b>Nessun file in lettura/ascolto.</b><br>Aggiungi file da Lista testi o da una Raccolta.</div>' : (curPage === 'Lista testi') ? '<div class="empty"><b>Nessun file in lista.</b><br>Tocca <b>+Aggiungi</b> per caricare un file dal tuo smartphone o tocca <b>Articolo</b> per caricare dal web inserendo un link o copiando il testo.</div>' : '<div class="empty"><b>Nessun libro ancora.</b><br>Tocca <b>+ Aggiungi</b> per caricare un PDF, EPUB, Word o TXT dall\'app File del tuo iPhone.</div>';
         if (selMode) selExit(false);
         return;
       }
@@ -1641,7 +1641,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v78): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v79): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
