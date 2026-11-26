@@ -1641,7 +1641,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v76): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v77): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1966,7 +1966,7 @@
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
   // ---------- Aggiorna l'app senza chiuderla (v25) ----------
-  var pgTitle = document.createElement('div'); pgTitle.id = 'pgtitle'; pgTitle.textContent = 'In lettura';
+  var pgTitle = document.createElement('div'); pgTitle.id = 'pgtitle'; pgTitle.textContent = 'Lista testi';
   var hdr = $('refresh').parentNode;
   hdr.parentNode.insertBefore(pgTitle, hdr.nextSibling);
   var pgBtn = document.createElement('button'); pgBtn.className = 'ib'; pgBtn.id = 'pgmore';
@@ -1975,7 +1975,7 @@
   hdr.insertBefore(pgBtn, $('refresh').nextSibling);
   var pgMenu = null;
   function closePgMenu() { if (pgMenu && pgMenu.parentNode) pgMenu.parentNode.removeChild(pgMenu); pgMenu = null; }
-  var curPage = 'In lettura';
+  var curPage = 'Lista testi';
   var curFolder = null;
   pgTitle.onclick = function () { if (curFolder) { curFolder = null; pgTitle.textContent = 'Raccolte'; renderList(); } };
   function goPage(name) { curFolder = null; curPage = name; pgTitle.textContent = name; closePgMenu(); renderList(); }
