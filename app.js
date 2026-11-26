@@ -945,12 +945,14 @@
     var a = new Audio(mp3Url);
     a.preload = 'metadata';
     mp3Au = a;
+    mp3ApplyRate(); /* v82 */
     a.addEventListener('loadedmetadata', function () {
+      mp3ApplyRate(); /* v82 */
       if (b.pos > 0 && b.pos < a.duration - 1) { try { a.currentTime = b.pos; } catch (e) {} }
       mp3Ui();
     });
     a.addEventListener('timeupdate', function () { mp3Ui(); var n = Date.now(); if (n - mp3Last > 5000) { mp3Last = n; mp3Save(); } });
-    a.addEventListener('play', mp3Ui);
+    a.addEventListener('play', function () { mp3ApplyRate(); mp3Ui(); }); /* v82 */
     a.addEventListener('pause', function () { mp3Ui(); mp3Save(); });
     a.addEventListener('ended', function () { mp3Ui(); mp3Save(); });
     $('mp3-title').textContent = b.title;
@@ -965,6 +967,20 @@
   $('mp3-fwd').onclick = function () { if (mp3Au) mp3Au.currentTime = Math.min(mp3Dur() || 1e9, mp3Au.currentTime + 15); };
   $('mp3-seek').oninput = function () { mp3Drag = true; $('mp3-time').textContent = mp3Fmt(this.value) + ' / ' + mp3Fmt(mp3Dur()); };
   $('mp3-seek').onchange = function () { if (mp3Au) mp3Au.currentTime = Number(this.value); mp3Drag = false; mp3Save(); };
+  /* v82 velocita MP3 */
+  var mp3Rates = [1, 1.25, 1.5, 1.75, 2, 2.5, 3], mp3Rate = 1;
+  try { var sr = parseFloat(localStorage.getItem('lettore-mp3-rate')); if (mp3Rates.indexOf(sr) >= 0) mp3Rate = sr; } catch (e) {}
+  function mp3ApplyRate() {
+    $('mp3-rate').textContent = '\u26A1 Velocit\u00E0 ' + String(mp3Rate).replace('.', ',') + '\u00D7';
+    if (!mp3Au) return;
+    try { mp3Au.defaultPlaybackRate = mp3Rate; mp3Au.playbackRate = mp3Rate; mp3Au.preservesPitch = true; mp3Au.webkitPreservesPitch = true; } catch (e) {}
+  }
+  $('mp3-rate').onclick = function () {
+    var k = mp3Rates.indexOf(mp3Rate);
+    mp3Rate = mp3Rates[(k + 1) % mp3Rates.length];
+    try { localStorage.setItem('lettore-mp3-rate', String(mp3Rate)); } catch (e) {}
+    mp3ApplyRate();
+  };
   $('mp3-close').onclick = function () { closeSheets(); };
 
   function openBook(id) {
@@ -1708,7 +1724,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v81): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v82): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
