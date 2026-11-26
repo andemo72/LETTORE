@@ -934,12 +934,15 @@
     mp3Save();
     try { a.pause(); } catch (e) {}
     mp3Au = null; mp3Book = null;
+    mediaButtons(); /* v84 */
+    if ('mediaSession' in navigator) { try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; } catch (e) {} }
     try { a.removeAttribute('src'); a.load(); } catch (e) {}
     if (mp3Url) { URL.revokeObjectURL(mp3Url); mp3Url = null; }
   }
   function openMp3(b, t) {
     if (!t || !t.blob) { alert('Audio non trovato.'); return; }
     mp3Close();
+    if (playing) pause(); /* v84 */
     mp3Book = b;
     mp3Url = URL.createObjectURL(t.blob);
     var a = new Audio(mp3Url);
@@ -952,12 +955,19 @@
       mp3Ui();
     });
     a.addEventListener('timeupdate', function () { mp3Ui(); var n = Date.now(); if (n - mp3Last > 5000) { mp3Last = n; mp3Save(); } });
-    a.addEventListener('play', function () { mp3ApplyRate(); mp3Ui(); }); /* v82 */
-    a.addEventListener('pause', function () { mp3Ui(); mp3Save(); });
+    a.addEventListener('play', function () { mp3ApplyRate(); mp3Ui(); mp3State(); }); /* v82 */
+    a.addEventListener('pause', function () { mp3Ui(); mp3Save(); mp3State(); });
     a.addEventListener('ended', function () { mp3Ui(); mp3Save(); });
     $('mp3-title').textContent = b.title;
     mp3Ui();
     openSheet('sheet-mp3');
+    mediaButtons(); /* v84 */
+    if ('mediaSession' in navigator && window.MediaMetadata) { try { navigator.mediaSession.metadata = new MediaMetadata({ title: b.title, artist: 'DEMOreader' }); } catch (e) {} }
+    mp3State();
+  }
+  function mp3State() {
+    if (!mp3Au || !('mediaSession' in navigator)) return;
+    try { navigator.mediaSession.playbackState = mp3Au.paused ? 'paused' : 'playing'; } catch (e) {}
   }
   $('mp3-play').onclick = function () {
     if (!mp3Au) return;
@@ -1739,7 +1749,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v83): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v84): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1842,14 +1852,21 @@
   }
 
   // comandi sulla schermata di blocco dell'iPhone
-  if ('mediaSession' in navigator) {
-    try {
-      navigator.mediaSession.setActionHandler('play', function () { if (!playing) speak(cur); armAway(); });
-      navigator.mediaSession.setActionHandler('pause', function () { pause(); });
-      navigator.mediaSession.setActionHandler('nexttrack', function () { $('next').onclick(); armAway(); });
-      navigator.mediaSession.setActionHandler('previoustrack', function () { $('prev').onclick(); armAway(); });
-    } catch (e) {}
+  function setAct(n, f) { try { navigator.mediaSession.setActionHandler(n, f); } catch (e) {} }
+  function mediaButtons() { /* v84: MP3 oppure Piper */
+    if (!('mediaSession' in navigator)) return;
+    var m = !!mp3Au;
+    setAct('play', function () {
+      if (mp3Au) { var p = mp3Au.play(); if (p && p.catch) p.catch(function () {}); return; }
+      if (!playing) speak(cur); armAway();
+    });
+    setAct('pause', function () { if (mp3Au) mp3Au.pause(); else pause(); });
+    setAct('nexttrack', m ? null : function () { $('next').onclick(); armAway(); });
+    setAct('previoustrack', m ? null : function () { $('prev').onclick(); armAway(); });
+    setAct('seekbackward', m ? function () { $('mp3-back').onclick(); } : null);
+    setAct('seekforward', m ? function () { $('mp3-fwd').onclick(); } : null);
   }
+  mediaButtons();
 
   // ---------- Voci e impostazioni ----------
   function langName(code) {
