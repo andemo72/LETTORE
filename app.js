@@ -912,9 +912,64 @@
   try { var sv = JSON.parse(localStorage.getItem('lettore-cfg')); if (sv) for (var k in sv) cfg[k] = sv[k]; } catch (e) {}
   function saveCfg() { try { localStorage.setItem('lettore-cfg', JSON.stringify(cfg)); } catch (e) {} }
 
+  /* v81 lettore MP3 */
+  var mp3Au = null, mp3Book = null, mp3Url = null, mp3Last = 0, mp3Drag = false;
+  function mp3Fmt(s) { s = Math.max(0, Math.floor(Number(s) || 0)); var m = Math.floor(s / 60), x = s % 60; return m + ':' + (x < 10 ? '0' : '') + x; }
+  function mp3Dur() { return (mp3Au && isFinite(mp3Au.duration)) ? mp3Au.duration : 0; }
+  function mp3Save() {
+    if (!mp3Book || !mp3Au) return;
+    mp3Book.pos = mp3Au.currentTime || 0;
+    if (mp3Dur()) mp3Book.total = mp3Dur();
+    dbPut('books', mp3Book);
+  }
+  function mp3Ui() {
+    if (!mp3Au) return;
+    $('mp3-time').textContent = mp3Fmt(mp3Au.currentTime) + ' / ' + mp3Fmt(mp3Dur());
+    if (!mp3Drag) { $('mp3-seek').max = Math.floor(mp3Dur()); $('mp3-seek').value = Math.floor(mp3Au.currentTime); }
+    $('mp3-play').textContent = mp3Au.paused ? '\u25B6 Play' : '\u23F8 Pausa';
+  }
+  function mp3Close() {
+    if (!mp3Au) return;
+    var a = mp3Au;
+    mp3Save();
+    try { a.pause(); } catch (e) {}
+    mp3Au = null; mp3Book = null;
+    try { a.removeAttribute('src'); a.load(); } catch (e) {}
+    if (mp3Url) { URL.revokeObjectURL(mp3Url); mp3Url = null; }
+  }
+  function openMp3(b, t) {
+    if (!t || !t.blob) { alert('Audio non trovato.'); return; }
+    mp3Close();
+    mp3Book = b;
+    mp3Url = URL.createObjectURL(t.blob);
+    var a = new Audio(mp3Url);
+    a.preload = 'metadata';
+    mp3Au = a;
+    a.addEventListener('loadedmetadata', function () {
+      if (b.pos > 0 && b.pos < a.duration - 1) { try { a.currentTime = b.pos; } catch (e) {} }
+      mp3Ui();
+    });
+    a.addEventListener('timeupdate', function () { mp3Ui(); var n = Date.now(); if (n - mp3Last > 5000) { mp3Last = n; mp3Save(); } });
+    a.addEventListener('play', mp3Ui);
+    a.addEventListener('pause', function () { mp3Ui(); mp3Save(); });
+    a.addEventListener('ended', function () { mp3Ui(); mp3Save(); });
+    $('mp3-title').textContent = b.title;
+    mp3Ui();
+    openSheet('sheet-mp3');
+  }
+  $('mp3-play').onclick = function () {
+    if (!mp3Au) return;
+    if (mp3Au.paused) { var p = mp3Au.play(); if (p && p.catch) p.catch(function () {}); } else mp3Au.pause();
+  };
+  $('mp3-back').onclick = function () { if (mp3Au) mp3Au.currentTime = Math.max(0, mp3Au.currentTime - 15); };
+  $('mp3-fwd').onclick = function () { if (mp3Au) mp3Au.currentTime = Math.min(mp3Dur() || 1e9, mp3Au.currentTime + 15); };
+  $('mp3-seek').oninput = function () { mp3Drag = true; $('mp3-time').textContent = mp3Fmt(this.value) + ' / ' + mp3Fmt(mp3Dur()); };
+  $('mp3-seek').onchange = function () { if (mp3Au) mp3Au.currentTime = Number(this.value); mp3Drag = false; mp3Save(); };
+  $('mp3-close').onclick = function () { closeSheets(); };
+
   function openBook(id) {
     Promise.all([dbGet('books', id), dbGet('texts', id)]).then(function (r) {
-      if (r[0] && r[0].kind === 'mp3') { alert('File MP3 salvato. Il lettore audio arriva nella prossima versione.'); return; } /* v80 */
+      if (r[0] && r[0].kind === 'mp3') { openMp3(r[0], r[1]); return; } /* v81 */
       book = r[0];
       sents = splitSentences(r[1].text); markNoise(sents); markHeads(sents); markNotes(sents); window.__sents = sents;
       if (book.marks && book.marks.length) {
@@ -1377,6 +1432,8 @@
 
   // ---------- Pannelli che salgono dal basso ----------
   function closeSheets() {
+    if ($('sheet-mp3').classList.contains('open')) mp3Close(); /* v81 */
+    $('sheet-mp3').classList.remove('open');
     $('sheet-pages').classList.remove('open');
     $('sheet-set').classList.remove('open');
     $('sheet-art').classList.remove('open');
@@ -1651,7 +1708,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v80): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v81): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
