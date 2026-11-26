@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <script>if(/Android/i.test(navigator.userAgent))document.documentElement.className+=' android';</script>
+<script>if(navigator.standalone===true)document.documentElement.className+=' iosapp';</script>
 <title>DEMOreader</title>
 <style>
 :root{--bg:#14161a;--card:#1f2228;--txt:#eceff4;--mut:#9aa3b2;--acc:#ffb454;--accTxt:#1a1200;
@@ -33,6 +34,7 @@ html,body{overscroll-behavior-y:none}
 #libtitle .r{font-family:'American Typewriter',Georgia,serif;font-style:italic;font-weight:normal}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:-apple-system,system-ui,sans-serif}
 body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+html.iosapp,html.iosapp body{height:100vh}
 .view{display:none;height:100%;flex-direction:column}
 .view.on{display:flex}
 header{padding:10px 12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);background:var(--bg);min-height:56px}
