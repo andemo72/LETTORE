@@ -968,19 +968,33 @@
   $('mp3-seek').oninput = function () { mp3Drag = true; $('mp3-time').textContent = mp3Fmt(this.value) + ' / ' + mp3Fmt(mp3Dur()); };
   $('mp3-seek').onchange = function () { if (mp3Au) mp3Au.currentTime = Number(this.value); mp3Drag = false; mp3Save(); };
   /* v82 velocita MP3 */
-  var mp3Rates = [1, 1.25, 1.5, 1.75, 2, 2.5, 3], mp3Rate = 1;
+  var mp3Rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3], mp3Rate = 1; /* v83 */
   try { var sr = parseFloat(localStorage.getItem('lettore-mp3-rate')); if (mp3Rates.indexOf(sr) >= 0) mp3Rate = sr; } catch (e) {}
   function mp3ApplyRate() {
-    $('mp3-rate').textContent = '\u26A1 Velocit\u00E0 ' + String(mp3Rate).replace('.', ',') + '\u00D7';
+    $('mp3-rate').textContent = '\u26A1 Velocit\u00E0 ' + mp3Rate.toFixed(2).replace('.', ',') + '\u00D7';
     if (!mp3Au) return;
     try { mp3Au.defaultPlaybackRate = mp3Rate; mp3Au.playbackRate = mp3Rate; mp3Au.preservesPitch = true; mp3Au.webkitPreservesPitch = true; } catch (e) {}
   }
-  $('mp3-rate').onclick = function () {
-    var k = mp3Rates.indexOf(mp3Rate);
-    mp3Rate = mp3Rates[(k + 1) % mp3Rates.length];
-    try { localStorage.setItem('lettore-mp3-rate', String(mp3Rate)); } catch (e) {}
-    mp3ApplyRate();
+  $('mp3-rate').onclick = function () { /* v83 */
+    var g = $('mp3-rategrid');
+    g.innerHTML = '';
+    mp3Rates.forEach(function (v) {
+      var b = document.createElement('button');
+      b.textContent = v.toFixed(2).replace('.', ',') + '\u00D7';
+      b.style.padding = '12px 0';
+      if (v === mp3Rate) { b.style.border = '3px solid var(--acc)'; b.style.fontWeight = '700'; }
+      b.onclick = function () {
+        mp3Rate = v;
+        try { localStorage.setItem('lettore-mp3-rate', String(mp3Rate)); } catch (e) {}
+        mp3ApplyRate();
+        $('mp3-ratebg').style.display = 'none';
+      };
+      g.appendChild(b);
+    });
+    $('mp3-ratebg').style.display = 'flex';
   };
+  $('mp3-ratex').onclick = function () { $('mp3-ratebg').style.display = 'none'; };
+  $('mp3-ratebg').onclick = function (e) { if (e.target === this) this.style.display = 'none'; };
   $('mp3-close').onclick = function () { closeSheets(); };
 
   function openBook(id) {
@@ -1449,6 +1463,7 @@
   // ---------- Pannelli che salgono dal basso ----------
   function closeSheets() {
     if ($('sheet-mp3').classList.contains('open')) mp3Close(); /* v81 */
+    $('mp3-ratebg').style.display = 'none'; /* v83 */
     $('sheet-mp3').classList.remove('open');
     $('sheet-pages').classList.remove('open');
     $('sheet-set').classList.remove('open');
@@ -1724,7 +1739,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v82): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v83): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce

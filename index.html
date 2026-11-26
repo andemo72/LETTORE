@@ -264,6 +264,14 @@ button.acc{background:var(--acc);color:var(--accTxt);border:none;font-weight:700
   <button id="mp3-close" style="width:100%;padding:13px">Chiudi</button>
 </div>
 
+<div id="mp3-ratebg" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(0,0,0,.5);align-items:center;justify-content:center">
+  <div style="background:var(--ctrl);color:var(--txt);border:1px solid var(--bd);border-radius:16px;padding:16px;width:280px;max-width:90%;max-height:85%;overflow:auto">
+    <div style="text-align:center;font-weight:700;margin-bottom:12px">Velocità</div>
+    <div id="mp3-rategrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+    <button id="mp3-ratex" style="width:100%;padding:12px;margin-top:12px">Annulla</button>
+  </div>
+</div>
+
 <div id="sheet-set" class="sheet">
   <div class="grab"></div>
   <h2 style="display:flex;justify-content:space-between;align-items:baseline">Impostazioni <span id="verfissa" style="font-size:13px;font-weight:normal;opacity:.7">v66</span></h2>
