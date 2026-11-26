@@ -151,6 +151,7 @@
         if (pv && !pv.e && /^(ffi|ffl|ff|fi|fl)$/.test(pv.s) && /^\s/.test(tx) && Math.abs((q.y || 0) - (pv.y || 0)) < 2) tx = tx.replace(/^\s+/, ''); /* v48 ligature */
         s += tx + (q.e ? ((/[A-Za-z\u00C0-\u00FF]-\s*$/.test(q.s) || (/^\s*-\s*$/.test(q.s) && /[A-Za-z\u00C0-\u00FF]$/.test(s.replace(/\s+$/, ''))) || (q.s === '' && /[A-Za-z\u00C0-\u00FF]-$/.test(s))) ? '\u0001' : ' ') : '');
       }
+      /* v69 spenta per prova: s = s.replace(/(?<=[a-z\u00E0-\u00FF])I/g, 'i'); */
       out.push({ label: 'Pagina ' + raw[r].n, p: raw[r].n, text: s.replace(/\s*-\s*\u0001\s*(?=[A-Za-z\u00C0-\u00FF])/g, '').replace(/\u0001/g, '').replace(/\s+/g, ' ').replace(/ ?\u0002 ?/g, '\n').trim() });
     }
     return out;
@@ -162,13 +163,13 @@
     }).then(function (pdf) {
       var out = [];
       function page(n) {
-        if (n > pdf.numPages) return Promise.resolve(buildPdf(pdf.__raw || []));
+        if (n > pdf.numPages) return Promise.resolve((window.__rawUltimo = pdf.__raw, buildPdf(pdf.__raw || [])));
         onProgress('PDF: pagina ' + n + ' di ' + pdf.numPages);
         return pdf.getPage(n).then(function (p) { return p.getTextContent().then(function (tc) { tc.__h = p.getViewport({ scale: 1 }).height; tc.__w = p.getViewport({ scale: 1 }).width; return tc; }); })
           .then(function (tc) {
             if (n <= 60) { window.__margini = window.__margini || []; tc.items.forEach(function (it) { if (it.transform && it.str.trim()) { var y = it.transform[5], h = tc.__h; if (/^\s*(\d{1,4}|[ivxlcIVXLC]{1,6})\s*$/.test(it.str) || y < h * 0.08) window.__margini.push(n + ' | x=' + Math.round(it.transform[4]) + ' y=' + Math.round(y) + ' h=' + Math.round(h) + ' | ' + JSON.stringify(it.str.slice(0, 40))); } }); }
             var rw = [];
-            for (var i = 0; i < tc.items.length; i++) { var it = tc.items[i]; rw.push({ s: it.str, e: it.hasEOL, x: it.transform ? it.transform[4] : null, y: it.transform ? it.transform[5] : null }); }
+            for (var i = 0; i < tc.items.length; i++) { var it = tc.items[i]; rw.push({ s: it.str, e: it.hasEOL, x: it.transform ? it.transform[4] : null, y: it.transform ? it.transform[5] : null, h: it.height, w: it.width, f: it.fontName }); }
             (pdf.__raw = pdf.__raw || []).push({ n: n, h: tc.__h, w: tc.__w, it: rw });
             return page(n + 1);
           });
@@ -581,6 +582,81 @@
   function renderList() {
     dbAll('books').then(function (books) {
       books.sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+      if (curPage === undefined || curPage === 'In lettura') { books = books.filter(function (x) { return x.reading === true; }); }
+      if (curPage === 'Lista testi') { books = books.filter(function (x) { return !x.folder; }); }
+      var listWin = function (b) {
+        var ov = document.createElement('div'); ov.id = 'rcov';
+        var bx = document.createElement('div'); bx.id = 'rcbox';
+        var h = document.createElement('h3'); h.textContent = b.title; bx.appendChild(h);
+        function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); }
+        function add(label, fn) {
+          var x = document.createElement('button'); x.textContent = label;
+          x.onclick = function () { close(); fn(); };
+          bx.appendChild(x);
+        }
+        if (b.reading !== true) add('Metti in lettura', function () { b.reading = true; dbPut('books', b).then(renderList); });
+        add('Inserisci in una raccolta', function () { openRaccolta(b); });
+        add('Elimina', function () {
+          if (confirm('Eliminare "' + b.title + '" per sempre?')) {
+            Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
+          }
+        });
+        add('Annulla', function () {});
+        ov.appendChild(bx);
+        ov.onclick = function (e) { if (e.target === ov) close(); };
+        document.body.appendChild(ov);
+      };
+      var bookWin = function (b) {
+        var ov = document.createElement('div'); ov.id = 'rcov';
+        var bx = document.createElement('div'); bx.id = 'rcbox';
+        var h = document.createElement('h3'); h.textContent = b.title; bx.appendChild(h);
+        function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); }
+        function add(label, fn) {
+          var x = document.createElement('button'); x.textContent = label;
+          x.onclick = function () { close(); fn(); };
+          bx.appendChild(x);
+        }
+        if (b.reading !== true) add('Metti in lettura', function () { b.reading = true; dbPut('books', b).then(renderList); });
+        add('Togli dalla raccolta', function () { delete b.folder; dbPut('books', b).then(renderList); });
+        add('Elimina definitivamente', function () {
+          if (confirm('Eliminare "' + b.title + '" per sempre?')) {
+            Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
+          }
+        });
+        add('Annulla', function () {});
+        ov.appendChild(bx);
+        ov.onclick = function (e) { if (e.target === ov) close(); };
+        document.body.appendChild(ov);
+      };
+      if (curPage === 'Raccolte') {
+        var names = [], cnt = {};
+        books.forEach(function (x) {
+          if (x.folder) { if (!cnt[x.folder]) { cnt[x.folder] = 0; names.push(x.folder); } cnt[x.folder]++; }
+        });
+        names.sort();
+        if (curFolder && !cnt[curFolder]) { curFolder = null; pgTitle.textContent = 'Raccolte'; }
+        if (!curFolder) {
+          var fbox = $('list'); fbox.innerHTML = ''; rows = {};
+          if (selMode) selExit(false);
+          if (!names.length) {
+            fbox.innerHTML = '<div class="empty"><b>Nessuna raccolta ancora.</b></div>';
+            return;
+          }
+          names.forEach(function (n) {
+            var fd = document.createElement('div'); fd.className = 'book';
+            var ft = document.createElement('div'); ft.className = 't';
+            var fb = document.createElement('b'); fb.textContent = '\uD83D\uDCDA ' + n;
+            var fs = document.createElement('small'); fs.textContent = cnt[n] + (cnt[n] === 1 ? ' libro' : ' libri') + ' \u203A';
+            ft.appendChild(fb); ft.appendChild(fs);
+            var fw = document.createElement('div'); fw.className = 'bw'; fw.appendChild(ft);
+            fd.appendChild(fw);
+            fd.onclick = function () { curFolder = n; pgTitle.textContent = '\u2190 Raccolte \u00B7 ' + n; renderList(); };
+            fbox.appendChild(fd);
+          });
+          return;
+        }
+        books = books.filter(function (x) { return x.folder === curFolder; });
+      }
       var box = $('list');
       box.innerHTML = '';
       rows = {};
@@ -589,6 +665,89 @@
         if (selMode) selExit(false);
         return;
       }
+      function openRaccolta(b, direct) {
+        var ov = null;
+        function closeW() { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); ov = null; }
+        function openW(title, items) {
+          closeW();
+          ov = document.createElement('div'); ov.id = 'rcov';
+          var bx = document.createElement('div'); bx.id = 'rcbox';
+          var h = document.createElement('h3'); h.textContent = title; bx.appendChild(h);
+          items.forEach(function (it) { bx.appendChild(it); });
+          ov.appendChild(bx); document.body.appendChild(ov);
+        }
+        function btn(text, cls, fn) {
+          var x = document.createElement('button'); x.textContent = text;
+          if (cls) x.className = cls;
+          x.onclick = fn; return x;
+        }
+        function foot(l, r) {
+          var d = document.createElement('div'); d.className = 'rcfoot';
+          if (l) d.appendChild(l); if (r) d.appendChild(r); return d;
+        }
+        function saveFolder(name) {
+          dbGet('books', b.id).then(function (x) {
+            if (!x) return;
+            x.folder = name;
+            return dbPut('books', x);
+          }).then(function () { closeW(); renderList(); });
+        }
+        function showHere(cur, names) {
+          var row = document.createElement('div'); row.className = 'rcrow';
+          var t = document.createElement('span'); t.textContent = '\uD83D\uDCDA ' + cur;
+          row.appendChild(t);
+          row.appendChild(btn('Sposta', 'lnk', function () { showList(names, cur); }));
+          openW('Raccolte', [row, foot(btn('Annulla', 'lnk', closeW), null)]);
+        }
+        function showConfirm(n, names) {
+          var row = document.createElement('div'); row.className = 'rcrow';
+          var t = document.createElement('span'); t.textContent = '\uD83D\uDCDA ' + n;
+          t.style.padding = '8px 0';
+          row.appendChild(t);
+          openW('Vuoi inserire qui il tuo libro?', [row, foot(
+            btn('Annulla', 'lnk', function () { showList(names, null); }),
+            btn('OK', 'lnk', function () { saveFolder(n); }))]);
+        }
+        function showList(names, cur) {
+          var items = [];
+          names.forEach(function (n) {
+            if (n === cur) return;
+            items.push(btn('\uD83D\uDCDA ' + n, '', function () {
+              if (cur) saveFolder(n); else showConfirm(n, names);
+            }));
+          });
+          items.push(foot(
+            btn('Annulla', 'lnk', function () { if (cur && !direct) showHere(cur, names); else closeW(); }),
+            btn('+ Crea', 'lnk', function () { showCreate(names, cur); })));
+          openW(cur ? 'Sposta in...' : 'Raccolte', items);
+        }
+        function showCreate(names, cur) {
+          var inp = document.createElement('input');
+          inp.type = 'text'; inp.placeholder = 'Nome della cartella'; inp.maxLength = 40;
+          var ok = btn('OK', 'lnk', function () {
+            var name = inp.value.trim();
+            if (!name) { inp.focus(); return; }
+            dbGet('books', b.id).then(function (x) {
+              if (!x) return;
+              x.folder = name;
+              return dbPut('books', x);
+            }).then(function () { closeW(); renderList(); });
+          });
+          var no = btn('Annulla', 'lnk', function () {
+            if (names && names.length) showList(names, cur); else closeW();
+          });
+          openW('CREA CARTELLA', [inp, foot(no, ok)]);
+          inp.focus();
+        }
+        dbAll('books').then(function (all) {
+          var names = [];
+          all.forEach(function (x) { if (x.folder && names.indexOf(x.folder) < 0) names.push(x.folder); });
+          names.sort();
+          var me = all.filter(function (x) { return x.id === b.id; })[0];
+          var cur = (me && me.folder) ? me.folder : null;
+          if (cur) { if (direct) showList(names, cur); else showHere(cur, names); } else if (names.length) showList(names, null); else showCreate(names, null);
+        });
+      }
       books.forEach(function (b) {
         var pct = b.total ? Math.round(100 * b.pos / b.total) : 0;
         var d = document.createElement('div');
@@ -596,31 +755,71 @@
         var t = document.createElement('div');
         t.className = 't';
         var bt = document.createElement('b'); bt.textContent = b.title;
-        var sm = document.createElement('small'); sm.textContent = pct + '% letto';
+        var sm = document.createElement('small'); sm.textContent = pct + '% letto' + (b.folder ? ' \u00B7 \uD83D\uDCDA ' + b.folder : '');
         var bar = document.createElement('div'); bar.className = 'bar';
         bar.innerHTML = '<i style="width:' + pct + '%"></i>';
         t.appendChild(bt); t.appendChild(sm); t.appendChild(bar);
-        var del = document.createElement('button'); del.className = 'del'; del.textContent = '🗑';
+        var act = document.createElement('div'); act.className = 'act';
+        var fav = document.createElement('button'); fav.className = 'fav'; fav.textContent = '\u2606'; fav.setAttribute('aria-label', 'Preferito');
+        var mnu = document.createElement('button'); mnu.className = 'mnu'; mnu.textContent = '\u22EE'; mnu.setAttribute('aria-label', 'Menu');
+        act.appendChild(fav); act.appendChild(mnu);
+        var w = document.createElement('div'); w.className = 'bw'; w.appendChild(t); w.appendChild(act);
         var chk = document.createElement('span'); chk.className = 'chkc';
-        d.appendChild(t); d.appendChild(del); d.appendChild(chk);
+        d.appendChild(w); d.appendChild(chk);
         rows[String(b.id)] = { id: b.id, title: b.title, d: d, c: chk };
+        mnu.onclick = function (e) {
+          e.stopPropagation();
+          var old = document.getElementById('bkmenu');
+          if (old) { old.parentNode.removeChild(old); if (old._for === mnu) return; }
+          var m = document.createElement('div'); m.id = 'bkmenu'; m._for = mnu;
+          var i1 = document.createElement('button'); i1.textContent = '\uD83D\uDDD1 Sposta nel cestino';
+          var i2 = document.createElement('button'); i2.textContent = '\uD83D\uDCDA Raccolta';
+          if (curPage === 'Raccolte' || curPage === 'Lista testi' || curPage === 'In lettura') {
+            var addRc = function (label, fn) {
+              var x = document.createElement('button'); x.textContent = label;
+              x.onclick = function () { closeM(); fn(); };
+              m.appendChild(x);
+            };
+            if ((curPage === 'Raccolte' || curPage === 'Lista testi') && b.reading !== true) addRc('Metti in lettura', function () { b.reading = true; dbPut('books', b).then(renderList); });
+            if (curPage === 'Raccolte') addRc('Togli dalla raccolta', function () { delete b.folder; dbPut('books', b).then(renderList); });
+            if (curPage === 'Raccolte' || !b.folder) addRc(curPage === 'Raccolte' ? 'Sposta' : 'Inserisci in una raccolta', function () { openRaccolta(b, true); });
+            if (curPage === 'In lettura') addRc('Togli dalla lettura', function () { delete b.reading; dbPut('books', b).then(renderList); });
+            addRc('Elimina', function () {
+              if (confirm('Eliminare "' + b.title + '" per sempre?')) {
+                Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
+              }
+            });
+            addRc('Annulla', function () {});
+          } else { m.appendChild(i1); m.appendChild(i2); }
+          document.body.appendChild(m);
+          var r = mnu.getBoundingClientRect();
+          m.style.right = (window.innerWidth - r.right) + 'px';
+          m.style.top = (r.bottom + 4) + 'px';
+          if (r.bottom + 4 + m.offsetHeight > window.innerHeight) m.style.top = Math.max(4, r.top - 4 - m.offsetHeight) + 'px';
+          function closeM() {
+            if (m.parentNode) m.parentNode.removeChild(m);
+            document.removeEventListener('click', closeM);
+          }
+          document.addEventListener('click', closeM);
+          i1.onclick = function () {
+            closeM();
+            if (confirm('Eliminare "' + b.title + '" per sempre?')) {
+              Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
+            }
+          };
+          i2.onclick = function () { closeM(); openRaccolta(b); };
+        };
         d.onclick = function (e) {
           if (longFired) { longFired = false; return; }
           if (selMode) { selToggle(String(b.id)); return; }
-          if (t.contains(e.target)) openBook(b.id);
-        };
-        del.onclick = function (e) {
-          e.stopPropagation();
-          if (confirm('Eliminare "' + b.title + '"?')) {
-            Promise.all([dbDel('books', b.id), dbDel('texts', b.id)]).then(renderList);
-          }
+          if (t.contains(e.target)) { if (curPage === 'Raccolte') bookWin(b); else if (curPage === 'Lista testi') listWin(b); else openBook(b.id); }
         };
         // pressione lunga: entra nella selezione
         var timer = null, x0 = 0, y0 = 0;
         function stopT() { if (timer) { clearTimeout(timer); timer = null; } }
         d.addEventListener('pointerdown', function (e) {
           longFired = false;
-          if (selMode || e.target === del) return;
+          if (selMode || act.contains(e.target)) return;
           x0 = e.clientX; y0 = e.clientY; stopT();
           timer = setTimeout(function () { timer = null; longFired = true; selEnter(String(b.id)); }, 450);
         });
@@ -807,7 +1006,8 @@
     $('pg').textContent = where + pct + '%';
     if (book) {
       book.pos = i; book.total = sents.length; book.last = Date.now();
-      dbPut('books', book);
+      var bk = book;
+      dbGet('books', bk.id).then(function (ex) { if (ex) dbPut('books', bk); });
     }
   }
 
@@ -926,7 +1126,7 @@
   function repStrip(i, t) {
     if (_repS !== sents || _repN !== sents.length) repBuild();
     if (!(_repOcc[i] >= 3)) return t;
-    if (i > 0 && sents[i].pg === sents[i - 1].pg) return t; /* v72 */
+    if (i > 0 && sents[i].pg === sents[i - 1].pg) return t;   /* v72 */
     var re = /\S+/g, key = '', m, k, end = 0;
     for (k = 0; k < _repK[i] && (m = re.exec(t)); k++) { key += docKey(m[0]); end = re.lastIndex; }
     if (k < _repK[i] || key !== _repKey[i]) return t;
@@ -1001,8 +1201,8 @@
     t = t.replace(/(^|[^A-Za-zÀ-ÿ])((?:[A-ZÀ-ÖØ-Þ] ){3,}[A-ZÀ-ÖØ-Þ])(?![A-Za-zÀ-ÿ])/g, function (m, a, b) { return a + b.replace(/ /g, ''); });   // v65: lettere spaziate (4+) unite
     // PAROLE IN STAMPATELLO: in minuscolo, altrimenti la voce le sillaba lettera per lettera
     t = t.replace(/(^|[^A-Za-zÀ-ÿ])([A-ZÀ-ÖØ-Þ]{4,})(?![A-Za-zÀ-ÿ])/g, function (m, a, b) { return a + b.toLowerCase(); });
-    t = t.replace(/[A-Za-zÀ-ÿ]+/g, function (m) { return (m.length > 1 && /[a-zà-ÿ]/.test(m) && /[A-ZÀ-ÖØ-Þ]/.test(m.slice(1))) ? m.toLowerCase() : m; });   // v71
-    t = t.replace(/[A-Za-zÀ-ÿ]+/g, function (m) { return (m.length > 1 && m === m.toUpperCase() && m !== m.toLowerCase() && ['USA','UFO','ONU'].indexOf(m) < 0) ? m.toLowerCase() : m; });   // v74
+    t = t.replace(/[A-Za-zÀ-ÿ]+/g, function (m) { return (m.length > 1 && /[a-zà-ÿ]/.test(m) && /[A-ZÀ-ÖØ-Þ]/.test(m.slice(1))) ? m.toLowerCase() : m; });   // v71 test: parole miste (sOno, SOno)
+    t = t.replace(/[A-Za-zÀ-ÿ]+/g, function (m) { return (m.length > 1 && m === m.toUpperCase() && m !== m.toLowerCase() && ['USA','UFO','ONU'].indexOf(m) < 0) ? m.toLowerCase() : m; });   // v74 test: parole tutte maiuscole in minuscolo per la voce
     if (cfg.symbols) {
       t = t.replace(/(\d)°(?=\s+[a-zà-ÿ])/g, '$1');
       var lang = (voice && voice.lang ? voice.lang : 'it').toLowerCase().substring(0, 2);
@@ -1441,7 +1641,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v66g): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v75): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1766,6 +1966,34 @@
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   });
   // ---------- Aggiorna l'app senza chiuderla (v25) ----------
+  var pgTitle = document.createElement('div'); pgTitle.id = 'pgtitle'; pgTitle.textContent = 'In lettura';
+  var hdr = $('refresh').parentNode;
+  hdr.parentNode.insertBefore(pgTitle, hdr.nextSibling);
+  var pgBtn = document.createElement('button'); pgBtn.className = 'ib'; pgBtn.id = 'pgmore';
+  pgBtn.setAttribute('aria-label', 'Menu');
+  pgBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+  hdr.insertBefore(pgBtn, $('refresh').nextSibling);
+  var pgMenu = null;
+  function closePgMenu() { if (pgMenu && pgMenu.parentNode) pgMenu.parentNode.removeChild(pgMenu); pgMenu = null; }
+  var curPage = 'In lettura';
+  var curFolder = null;
+  pgTitle.onclick = function () { if (curFolder) { curFolder = null; pgTitle.textContent = 'Raccolte'; renderList(); } };
+  function goPage(name) { curFolder = null; curPage = name; pgTitle.textContent = name; closePgMenu(); renderList(); }
+  pgBtn.onclick = function (e) {
+    e.stopPropagation();
+    if (pgMenu) { closePgMenu(); return; }
+    pgMenu = document.createElement('div'); pgMenu.id = 'pgmenu';
+    ['\uD83D\uDCDA Raccolte', '\uD83D\uDCD6 In lettura', '\uD83D\uDCCB Lista testi'].forEach(function (t) {
+      var x = document.createElement('button'); x.textContent = t;
+      x.onclick = function () { goPage(t.slice(3)); };
+      pgMenu.appendChild(x);
+    });
+    var r = pgBtn.getBoundingClientRect();
+    pgMenu.style.top = (r.bottom + 4) + 'px';
+    pgMenu.style.right = (window.innerWidth - r.right) + 'px';
+    document.body.appendChild(pgMenu);
+  };
+  document.addEventListener('click', function () { closePgMenu(); });
   $('refresh').onclick = function () {
     var btn = this;
     if (btn.classList.contains('spin')) return;
