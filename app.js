@@ -1450,8 +1450,8 @@
   }
 
   $('play').onclick = function () { if (playing) pause(); else speak(cur); };
-  $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) speak(n); else show(n); };
-  $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) speak(n); else show(n); };
+  $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) { while (n < sents.length - 1 && !spokenText(n)) n++; speak(n); } else show(n); };  /* v85 */
+  $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) { while (n > 0 && !spokenText(n)) n--; speak(n); } else show(n); };  /* v85 */
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
   // tasto indietro del telefono (Android): chiude i pannelli, poi torna alla libreria invece di uscire dall'app
   var histPushed = false;
@@ -1749,7 +1749,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v84): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v85): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
