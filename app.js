@@ -1465,7 +1465,7 @@
     if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (e) {} }
   }
 
-  $('play').onclick = function () { if (playing) softPause(); else resumeOrSpeak(); };
+  $('play').onclick = function () { logEv('tasto app (playing=' + playing + ')'); if (playing) softPause(); else resumeOrSpeak(); };
   $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) { while (n < sents.length - 1 && !spokenText(n)) n++; speak(n); } else show(n); };  /* v85 */
   $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) { while (n > 0 && !spokenText(n)) n--; speak(n); } else show(n); };  /* v85 */
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
@@ -1676,7 +1676,7 @@
   function logEv(t) {
     var d = new Date();
     evlog.push(('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2) + ' ' + t);
-    if (evlog.length > 10) evlog.shift();
+    if (evlog.length > 30) evlog.shift();
     try { showDiag(); } catch (e) {}
   }
   function makeSink(g) {
@@ -1687,8 +1687,8 @@
     }
     var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false, held = false;
     var lastT = Date.now(); var heldT = 0, silURL = URL.createObjectURL(wavBlob(new Float32Array(22050), 22050, 0)); /* v87 */
-    ['pause', 'error', 'stalled', 'waiting', 'emptied', 'suspend'].forEach(function (n) {
-      au['on' + n] = function () { if (!stopped && g === gen) logEv('audio: ' + n + (n === 'error' && au.error ? ' ' + au.error.code : '')); };
+    ['pause', 'error', 'stalled'].forEach(function (n) {
+      au['on' + n] = function () { if (!stopped && g === gen && !(n === 'pause' && au.ended)) logEv('audio: ' + n + (n === 'error' && au.error ? ' ' + au.error.code : '')); };
     });
     au.ontimeupdate = function () { lastT = Date.now(); };
     // guardiano: se l'iPhone ferma l'audio senza avvisare, lo fa ripartire
@@ -1747,10 +1747,10 @@
         done = true;
         if (!curItem && !q.length) { if (g === gen) pause(); } else maybeStart();
       },
-      hold: function () { held = true; if (curItem) heldT = au.currentTime; au.src = silURL; au.loop = true; var s = au.play(); if (s && s.catch) s.catch(function () {}); }, /* v87 silenzio in loop */
+      hold: function () { held = true; if (curItem) heldT = au.currentTime; au.src = silURL; au.loop = true; var s = au.play(); if (s && s.catch) s.then(function () { logEv('silenzio avviato'); }, function (e) { logEv('silenzio rifiutato: ' + e.name); }); }, /* v87 silenzio in loop */
       resume: function () {
         held = false; lastT = Date.now();
-        if (curItem) { au.loop = false; au.src = curItem.url; au.onloadedmetadata = function () { au.onloadedmetadata = null; try { au.currentTime = heldT; } catch (e) {} }; var r = au.play(); if (r && r.catch) r.catch(function (e) { logEv('ripresa fallita: ' + e.name); }); } /* v87 */
+        if (curItem) { au.loop = false; au.src = curItem.url; au.onloadedmetadata = function () { au.onloadedmetadata = null; try { au.currentTime = heldT; } catch (e) {} }; var r = au.play(); if (r && r.catch) r.then(function () { logEv('ripresa: play accettato'); }, function (e) { logEv('ripresa fallita: ' + e.name); }); } /* v87 */
         else if (done && !q.length) { if (g === gen) pause(); }
         else maybeStart();
       },
@@ -1774,7 +1774,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v87): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v88): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1881,11 +1881,11 @@
   function mediaButtons() { /* v84: MP3 oppure Piper */
     if (!('mediaSession' in navigator)) return;
     var m = !!mp3Au;
-    setAct('play', function () {
+    setAct('play', function () { logEv('banner: PLAY (playing=' + playing + ')');
       if (mp3Au) { var p = mp3Au.play(); if (p && p.catch) p.catch(function () {}); return; }
       if (!playing) resumeOrSpeak(); armAway();
     });
-    setAct('pause', function () { if (mp3Au) mp3Au.pause(); else softPause(); });
+    setAct('pause', function () { logEv('banner: PAUSA (playing=' + playing + ')'); if (mp3Au) mp3Au.pause(); else softPause(); });
     setAct('nexttrack', m ? null : function () { $('next').onclick(); armAway(); });
     setAct('previoustrack', m ? null : function () { $('prev').onclick(); armAway(); });
     setAct('seekbackward', m ? function () { $('mp3-back').onclick(); } : null);
