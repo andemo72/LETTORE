@@ -1380,7 +1380,7 @@
 
   // ---------- Ascolto a schermo spento / in altre schede ----------
   var IS_ANDROID = /Android/i.test(navigator.userAgent);
-  var lastSpeechAt = 0, lastBeat = Date.now(), hiddenAt = 0;
+  var lastSpeechAt = 0, lastBeat = Date.now(), hiddenAt = 0, bannerAct = false; /* v89 */
   setInterval(function () { lastBeat = Date.now(); }, 5000);
   var keepAu = null, awayTimer = null, awayStopped = false, AWAY_MIN = 20;
   // 1 secondo di silenzio vero, in loop: fa considerare l'app "in riproduzione" (notifica con i comandi, niente sospensione)
@@ -1445,13 +1445,13 @@
   /* v86: pausa morbida della voce neurale (audio e coda restano pronti) */
   var pHold = '';
   function holdKey() { return [book && book.id, cur, voice && voice.voiceURI, cfg.rate, cfg.pauseMs].join('|'); }
-  function softPause() {
+  function softPause() { bannerAct = true; /* v89 */
     if (!(playing && voice && voice.piper && pSink)) { if (playing) pause(); return; }
     playing = false; pHold = holdKey(); pSink.hold();
     try { localStorage.removeItem('lettore-playing'); } catch (e) {}
     clearAway(); updatePlayBtn(); releaseWake();
   }
-  function resumeOrSpeak() {
+  function resumeOrSpeak() { bannerAct = true; /* v89 */
     if (!(pSink && pHold && pHold === holdKey())) { pHold = ''; speak(cur); return; }
     pHold = ''; playing = true; pSink.resume();
     try { localStorage.setItem('lettore-playing', String(Date.now())); } catch (e) {}
@@ -1774,7 +1774,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v88): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v89): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -2064,13 +2064,13 @@
         var spoke = lastSpeechAt > hiddenAt ? Math.round((lastSpeechAt - hiddenAt) / 1000) + 's' : 'mai';
         logEv('riacceso dopo ' + tot + 's; app attiva ~' + alive + 's; ultima frase a ' + spoke);
         hiddenAt = 0;
-        if (playing && tot > 2) { setTimeout(function () { if (playing && document.visibilityState === 'visible') { logEv('riavvio lettura (v66c)'); speak(cur); } }, 400); }
+        if (bannerAct) logEv('v66c saltato (banner)'); if (playing && tot > 2 && !bannerAct) { setTimeout(function () { if (playing && document.visibilityState === 'visible') { logEv('riavvio lettura (v66c)'); speak(cur); } }, 400); }
       }
       clearAway();
       if (playing) requestWake();
       if (awayStopped) { awayStopped = false; toast('Lettura fermata dopo ' + AWAY_MIN + ' minuti a schermo spento. Premi Leggi per continuare.', 7000); }
     } else {
-      if (playing) { hiddenAt = Date.now(); lastBeat = hiddenAt; logEv('schermo spento'); }
+      bannerAct = false; if (playing) { hiddenAt = Date.now(); lastBeat = hiddenAt; logEv('schermo spento'); }
       armAway();
     }
   });
