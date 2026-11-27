@@ -1686,7 +1686,7 @@
       document.body.appendChild(pAudio);
     }
     var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false, held = false;
-    var lastT = Date.now();
+    var lastT = Date.now(); var heldT = 0, silURL = URL.createObjectURL(wavBlob(new Float32Array(22050), 22050, 0)); /* v87 */
     ['pause', 'error', 'stalled', 'waiting', 'emptied', 'suspend'].forEach(function (n) {
       au['on' + n] = function () { if (!stopped && g === gen) logEv('audio: ' + n + (n === 'error' && au.error ? ' ' + au.error.code : '')); };
     });
@@ -1724,7 +1724,7 @@
         return;
       }
       curItem = q.shift(); lastT = Date.now();
-      au.src = curItem.url;
+      au.loop = false; au.src = curItem.url;
       var pp = au.play();
       if (pp && pp.catch) pp.catch(function (e) { if (e.name !== 'AbortError') toast('Audio bloccato: tocca Leggi di nuovo', 4000); });
       if (g === gen) show(curItem.i);
@@ -1747,15 +1747,15 @@
         done = true;
         if (!curItem && !q.length) { if (g === gen) pause(); } else maybeStart();
       },
-      hold: function () { held = true; au.pause(); }, /* v86 */
+      hold: function () { held = true; if (curItem) heldT = au.currentTime; au.src = silURL; au.loop = true; var s = au.play(); if (s && s.catch) s.catch(function () {}); }, /* v87 silenzio in loop */
       resume: function () {
         held = false; lastT = Date.now();
-        if (curItem) { var r = au.play(); if (r && r.catch) r.catch(function (e) { logEv('ripresa fallita: ' + e.name); }); }
+        if (curItem) { au.loop = false; au.src = curItem.url; au.onloadedmetadata = function () { au.onloadedmetadata = null; try { au.currentTime = heldT; } catch (e) {} }; var r = au.play(); if (r && r.catch) r.catch(function (e) { logEv('ripresa fallita: ' + e.name); }); } /* v87 */
         else if (done && !q.length) { if (g === gen) pause(); }
         else maybeStart();
       },
       stop: function () {
-        stopped = true; clearInterval(wd); au.onended = null; au.pause();
+        stopped = true; clearInterval(wd); au.onended = null; au.loop = false; au.pause(); URL.revokeObjectURL(silURL);
         if (waiting) toast('');
         q.forEach(function (it) { URL.revokeObjectURL(it.url); }); q = [];
         if (curItem) { URL.revokeObjectURL(curItem.url); curItem = null; }
@@ -1774,7 +1774,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v86): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v87): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
