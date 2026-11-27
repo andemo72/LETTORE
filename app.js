@@ -1442,6 +1442,22 @@
     releaseWake();
   }
 
+  /* v86: pausa morbida della voce neurale (audio e coda restano pronti) */
+  var pHold = '';
+  function holdKey() { return [book && book.id, cur, voice && voice.voiceURI, cfg.rate, cfg.pauseMs].join('|'); }
+  function softPause() {
+    if (!(playing && voice && voice.piper && pSink)) { if (playing) pause(); return; }
+    playing = false; pHold = holdKey(); pSink.hold();
+    try { localStorage.removeItem('lettore-playing'); } catch (e) {}
+    clearAway(); updatePlayBtn(); releaseWake();
+  }
+  function resumeOrSpeak() {
+    if (!(pSink && pHold && pHold === holdKey())) { pHold = ''; speak(cur); return; }
+    pHold = ''; playing = true; pSink.resume();
+    try { localStorage.setItem('lettore-playing', String(Date.now())); } catch (e) {}
+    logEv('ripresa dalla pausa'); updatePlayBtn(); requestWake();
+  }
+
   var ICO_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
   var ICO_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
   function updatePlayBtn() {
@@ -1449,7 +1465,7 @@
     if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (e) {} }
   }
 
-  $('play').onclick = function () { if (playing) pause(); else speak(cur); };
+  $('play').onclick = function () { if (playing) softPause(); else resumeOrSpeak(); };
   $('next').onclick = function () { var n = Math.min(sents.length - 1, cur + 1); if (playing) { while (n < sents.length - 1 && !spokenText(n)) n++; speak(n); } else show(n); };  /* v85 */
   $('prev').onclick = function () { var n = Math.max(0, cur - 1); if (playing) { while (n > 0 && !spokenText(n)) n--; speak(n); } else show(n); };  /* v85 */
   $('pos').onchange = function () { var n = parseInt(this.value, 10); if (playing) speak(n); else show(n, true); };
@@ -1669,7 +1685,7 @@
       pAudio.setAttribute('playsinline', ''); pAudio.preload = 'auto';
       document.body.appendChild(pAudio);
     }
-    var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false;
+    var au = pAudio, q = [], curItem = null, buffered = 0, stopped = false, done = false, underruns = 0, waiting = false, held = false;
     var lastT = Date.now();
     ['pause', 'error', 'stalled', 'waiting', 'emptied', 'suspend'].forEach(function (n) {
       au['on' + n] = function () { if (!stopped && g === gen) logEv('audio: ' + n + (n === 'error' && au.error ? ' ' + au.error.code : '')); };
@@ -1678,6 +1694,7 @@
     // guardiano: se l'iPhone ferma l'audio senza avvisare, lo fa ripartire
     var wd = setInterval(function () {
       if (stopped) { clearInterval(wd); return; }
+      if (held) { lastT = Date.now(); return; } /* v86 */
       if (g !== gen) return;
       if (curItem && au.paused && !au.ended) { logEv('riprendo audio'); var r = au.play(); if (r && r.catch) r.catch(function () {}); }
       if (!curItem && q.length && !waiting) { logEv('coda ferma: riparto'); next(); }
@@ -1692,12 +1709,13 @@
     // se la voce non riesce a stare al passo, invece di fermarsi a ogni frase accumula un po' di audio e riparte
     function target() { return Math.min(6 + 4 * underruns, 20); }
     function maybeStart() {
-      if (stopped || curItem || !q.length) return;
+      if (stopped || held || curItem || !q.length) return;
       if (waiting && !done && buffered < target()) return;
       if (waiting) { waiting = false; toast(''); }
       next();
     }
     function next() {
+      if (held) return; /* v86 */
       if (stopped) return;
       if (!q.length) {
         curItem = null;
@@ -1729,6 +1747,13 @@
         done = true;
         if (!curItem && !q.length) { if (g === gen) pause(); } else maybeStart();
       },
+      hold: function () { held = true; au.pause(); }, /* v86 */
+      resume: function () {
+        held = false; lastT = Date.now();
+        if (curItem) { var r = au.play(); if (r && r.catch) r.catch(function (e) { logEv('ripresa fallita: ' + e.name); }); }
+        else if (done && !q.length) { if (g === gen) pause(); }
+        else maybeStart();
+      },
       stop: function () {
         stopped = true; clearInterval(wd); au.onended = null; au.pause();
         if (waiting) toast('');
@@ -1749,7 +1774,7 @@
       d.style.cssText = 'white-space:pre-wrap;margin-top:18px;font-size:12px;color:var(--mut);text-align:center';
       $('sheet-set').appendChild(d);
     }
-    d.textContent = 'Eventi (v85): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
+    d.textContent = 'Eventi (v86): ' + (evlog.length ? evlog.join(' | ') : 'nessuno') + '\n' + (diag.gen ? 'Velocità della voce neurale: ×' + (diag.aud / diag.gen).toFixed(1) + ' (sopra 1.0 = scorrevole) · calcolo su ' + (PiperEngine.threads ? PiperEngine.threads() : 1) + ' cuore/i' : '');
   }
 
   // genera l'audio una frase alla volta, restando sempre un po' avanti rispetto alla voce
@@ -1858,9 +1883,9 @@
     var m = !!mp3Au;
     setAct('play', function () {
       if (mp3Au) { var p = mp3Au.play(); if (p && p.catch) p.catch(function () {}); return; }
-      if (!playing) speak(cur); armAway();
+      if (!playing) resumeOrSpeak(); armAway();
     });
-    setAct('pause', function () { if (mp3Au) mp3Au.pause(); else pause(); });
+    setAct('pause', function () { if (mp3Au) mp3Au.pause(); else softPause(); });
     setAct('nexttrack', m ? null : function () { $('next').onclick(); armAway(); });
     setAct('previoustrack', m ? null : function () { $('prev').onclick(); armAway(); });
     setAct('seekbackward', m ? function () { $('mp3-back').onclick(); } : null);
